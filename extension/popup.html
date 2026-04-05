@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prompt DB Importer</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Segoe UI", sans-serif;
+      }
+
+      body {
+        width: 360px;
+        margin: 0;
+        padding: 16px;
+        background: #f5f1e9;
+        color: #243026;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .panel {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(36, 48, 38, 0.08);
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 11px 14px;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .primary {
+        background: #3d7a57;
+        color: #fff;
+      }
+
+      .secondary {
+        background: rgba(61, 122, 87, 0.14);
+        color: #243026;
+      }
+
+      .badge-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .badge {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(61, 122, 87, 0.12);
+        font-size: 12px;
+      }
+
+      .status {
+        font-size: 13px;
+        line-height: 1.45;
+        color: #5a665d;
+      }
+
+      .status.error {
+        color: #b24c4c;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 120px;
+        border: 1px solid rgba(36, 48, 38, 0.08);
+        border-radius: 14px;
+        padding: 12px;
+        resize: vertical;
+        font: 12px/1.4 "Cascadia Code", monospace;
+        background: rgba(255, 255, 255, 0.78);
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stack">
+      <section class="panel">
+        <div>
+          <h1 style="font-size: 1.05rem">Prompt DB Importer</h1>
+          <p style="margin-top: 6px; color: #5a665d">
+            Extract mixed producer.ai data and send it into the local Electron database.
+          </p>
+        </div>
+        <div class="row">
+          <button id="check" class="secondary">Check local app</button>
+          <button id="send" class="primary">Send current page</button>
+        </div>
+        <div id="status" class="status">Ready</div>
+      </section>
+
+      <section class="panel">
+        <div>
+          <h2 style="font-size: 0.96rem">Extraction Preview</h2>
+        </div>
+        <div class="badge-row" id="metrics"></div>
+        <div class="row">
+          <button id="scan" class="secondary">Refresh preview</button>
+          <button id="copy" class="secondary">Copy raw payload</button>
+        </div>
+        <textarea id="preview" readonly></textarea>
+      </section>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
