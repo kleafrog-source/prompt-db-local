@@ -2,9 +2,13 @@
   "manifest_version": 3,
   "name": "Prompt DB Importer",
   "version": "0.1.0",
-  "description": "Extract producer.ai session JSON and forward it to the local Electron prompt database.",
+  "description": "Generate prompt batches from the local Electron app and insert them into producer.ai with synced usage status.",
   "permissions": ["activeTab", "storage", "tabs"],
-  "host_permissions": ["https://producer.ai/*", "https://*.producer.ai/*"],
+  "host_permissions": [
+    "https://producer.ai/*",
+    "https://*.producer.ai/*",
+    "http://127.0.0.1/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },

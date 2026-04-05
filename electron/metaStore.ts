@@ -60,6 +60,29 @@ type ExportPreset = {
   };
 };
 
+export type PromptSnapshotRecord = {
+  id: string;
+  name: string;
+  text: string;
+  json_data: Record<string, unknown>;
+  fingerprint: string;
+  variables: string[];
+  keywords: string[];
+  created_at: string;
+  updated_at: string;
+  source?: string;
+};
+
+export type PromptUsageLogEntry = {
+  promptId: string;
+  usedAt: string;
+  url: string;
+  tabId: number;
+  windowId: number;
+  chromeProfileId?: string;
+  source: 'prompt_used' | 'prompt_sent_message';
+};
+
 export type PromptDbMetaState = {
   tagRegistry: TagRegistry;
   elementTagBindings: ElementTagBinding[];
@@ -81,6 +104,8 @@ const META_FILE_NAMES = {
   elementTagBindings: 'element-tag-bindings.json',
   keySequencePresets: 'key-sequence-presets.json',
   exportPresets: 'export-presets.json',
+  promptSnapshot: 'prompts-snapshot.json',
+  promptUsageLog: 'prompt-usage-log.json',
 } as const;
 
 const getMetaDirectory = () => path.join(app.getPath('userData'), '.prompt-db-meta');
@@ -142,4 +167,37 @@ export const clearMetaState = async () => {
   const empty = createEmptyMetaState();
   await saveMetaState(empty);
   return empty;
+};
+
+export const loadPromptSnapshot = async (): Promise<PromptSnapshotRecord[]> => {
+  const metaDir = await ensureMetaDirectory();
+  return readJsonFile(path.join(metaDir, META_FILE_NAMES.promptSnapshot), []);
+};
+
+export const savePromptSnapshot = async (prompts: PromptSnapshotRecord[]) => {
+  const metaDir = await ensureMetaDirectory();
+  await writeJsonFile(path.join(metaDir, META_FILE_NAMES.promptSnapshot), prompts);
+  return {
+    directoryPath: metaDir,
+    count: prompts.length,
+  };
+};
+
+export const loadPromptUsageLog = async (): Promise<PromptUsageLogEntry[]> => {
+  const metaDir = await ensureMetaDirectory();
+  return readJsonFile(path.join(metaDir, META_FILE_NAMES.promptUsageLog), []);
+};
+
+export const appendPromptUsageLog = async (entry: PromptUsageLogEntry) => {
+  const metaDir = await ensureMetaDirectory();
+  const existing = await readJsonFile<PromptUsageLogEntry[]>(
+    path.join(metaDir, META_FILE_NAMES.promptUsageLog),
+    [],
+  );
+  const next = [entry, ...existing].slice(0, 5000);
+  await writeJsonFile(path.join(metaDir, META_FILE_NAMES.promptUsageLog), next);
+  return {
+    directoryPath: metaDir,
+    count: next.length,
+  };
 };

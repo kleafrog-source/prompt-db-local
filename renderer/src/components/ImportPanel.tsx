@@ -37,7 +37,9 @@ export const ImportPanel = ({
 
     <p className="panel-copy">
       Electron listens on <code>ws://localhost:{wsPort}</code> and forwards payloads from the
-      Chrome extension into IndexedDB and the new meta-driven analysis panels.
+      Chrome extension into IndexedDB and the new meta-driven analysis panels. The companion Chrome
+      extension also uses the local HTTP API on <code>http://127.0.0.1:3210</code> for batch
+      generation and prompt usage tracking.
     </p>
 
     <div className="export-stats">

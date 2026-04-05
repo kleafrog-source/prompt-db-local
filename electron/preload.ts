@@ -67,6 +67,19 @@ type PromptDbMetaState = {
   }>;
 };
 
+type PromptSnapshotRecord = {
+  id: string;
+  name: string;
+  text: string;
+  json_data: Record<string, unknown>;
+  fingerprint: string;
+  variables: string[];
+  keywords: string[];
+  created_at: string;
+  updated_at: string;
+  source?: string;
+};
+
 contextBridge.exposeInMainWorld('electronAPI', {
   openJsonFile: async () =>
     ipcRenderer.invoke('dialogs:open-json') as Promise<
@@ -89,6 +102,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       directoryPath: string;
     }>,
   clearMetaState: async () => ipcRenderer.invoke('meta:clear-state') as Promise<PromptDbMetaState>,
+  savePromptSnapshot: async (payload: PromptSnapshotRecord[]) =>
+    ipcRenderer.invoke('snapshot:save-prompts', payload) as Promise<{
+      directoryPath: string;
+      count: number;
+    }>,
   saveExportFile: async (payload: { defaultFileName: string; content: string }) =>
     ipcRenderer.invoke('dialogs:save-export-file', payload) as Promise<
       | {

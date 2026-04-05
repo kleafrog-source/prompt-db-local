@@ -90,6 +90,10 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
   loadPrompts: async () => {
     const prompts = await promptsDb.prompts.orderBy('updated_at').reverse().toArray();
 
+    if (window.electronAPI) {
+      await window.electronAPI.savePromptSnapshot(prompts);
+    }
+
     set((state) => ({
       prompts,
       selectedPromptId:
@@ -223,6 +227,7 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
 
     if (window.electronAPI) {
       await window.electronAPI.clearMetaState();
+      await window.electronAPI.savePromptSnapshot([]);
     }
 
     set({

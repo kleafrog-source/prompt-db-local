@@ -67,6 +67,19 @@ type PromptDbMetaState = {
   }>;
 };
 
+type PromptSnapshotRecord = {
+  id: string;
+  name: string;
+  text: string;
+  json_data: Record<string, unknown>;
+  fingerprint: string;
+  variables: string[];
+  keywords: string[];
+  created_at: string;
+  updated_at: string;
+  source?: string;
+};
+
 interface Window {
   electronAPI?: {
     openJsonFile: () => Promise<Array<{ filePath: string; content: string }> | null>;
@@ -75,6 +88,10 @@ interface Window {
     loadMetaState: () => Promise<PromptDbMetaState>;
     saveMetaState: (payload: PromptDbMetaState) => Promise<{ directoryPath: string }>;
     clearMetaState: () => Promise<PromptDbMetaState>;
+    savePromptSnapshot: (payload: PromptSnapshotRecord[]) => Promise<{
+      directoryPath: string;
+      count: number;
+    }>;
     saveExportFile: (payload: {
       defaultFileName: string;
       content: string;

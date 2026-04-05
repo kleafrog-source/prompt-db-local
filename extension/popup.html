@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prompt DB Importer</title>
+    <title>Prompt Batch Companion</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -11,7 +11,7 @@
       }
 
       body {
-        width: 360px;
+        width: 420px;
         margin: 0;
         padding: 16px;
         background: #f5f1e9;
@@ -31,11 +31,16 @@
 
       .panel {
         display: grid;
-        gap: 10px;
+        gap: 12px;
         padding: 14px;
         border-radius: 18px;
-        background: rgba(255, 255, 255, 0.7);
+        background: rgba(255, 255, 255, 0.78);
         border: 1px solid rgba(36, 48, 38, 0.08);
+      }
+
+      .grid {
+        display: grid;
+        gap: 10px;
       }
 
       .row {
@@ -44,12 +49,44 @@
         flex-wrap: wrap;
       }
 
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .field label {
+        font-size: 12px;
+        color: #5a665d;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid rgba(36, 48, 38, 0.08);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.92);
+        color: inherit;
+      }
+
       button {
         border: 0;
         border-radius: 999px;
         padding: 11px 14px;
-        font: inherit;
         cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
       }
 
       .primary {
@@ -60,6 +97,16 @@
       .secondary {
         background: rgba(61, 122, 87, 0.14);
         color: #243026;
+      }
+
+      .status {
+        font-size: 13px;
+        line-height: 1.45;
+        color: #5a665d;
+      }
+
+      .status.error {
+        color: #b24c4c;
       }
 
       .badge-row {
@@ -75,26 +122,50 @@
         font-size: 12px;
       }
 
-      .status {
-        font-size: 13px;
+      .prompt-list {
+        display: grid;
+        gap: 10px;
+        max-height: 340px;
+        overflow: auto;
+      }
+
+      .prompt-card {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid rgba(36, 48, 38, 0.08);
+      }
+
+      .prompt-card.used {
+        border-color: #3aa56c;
+        box-shadow: inset 0 0 0 1px rgba(58, 165, 108, 0.3);
+      }
+
+      .prompt-text {
+        font-size: 12px;
         line-height: 1.45;
+        max-height: 86px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+
+      .prompt-meta {
+        font-size: 11px;
+        line-height: 1.4;
         color: #5a665d;
       }
 
-      .status.error {
-        color: #b24c4c;
-      }
-
-      textarea {
-        width: 100%;
-        min-height: 120px;
-        border: 1px solid rgba(36, 48, 38, 0.08);
-        border-radius: 14px;
-        padding: 12px;
-        resize: vertical;
-        font: 12px/1.4 "Cascadia Code", monospace;
-        background: rgba(255, 255, 255, 0.78);
-        color: inherit;
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid currentColor;
+        font-size: 11px;
+        width: fit-content;
       }
     </style>
   </head>
@@ -102,28 +173,61 @@
     <div class="stack">
       <section class="panel">
         <div>
-          <h1 style="font-size: 1.05rem">Prompt DB Importer</h1>
+          <h1 style="font-size: 1.05rem">Prompt Batch Companion</h1>
           <p style="margin-top: 6px; color: #5a665d">
-            Extract mixed producer.ai data and send it into the local Electron database.
+            Generate prompt batches from `prompt-db-local`, insert them into producer.ai, and keep
+            used status synced across tabs.
           </p>
-        </div>
-        <div class="row">
-          <button id="check" class="secondary">Check local app</button>
-          <button id="send" class="primary">Send current page</button>
         </div>
         <div id="status" class="status">Ready</div>
       </section>
 
       <section class="panel">
-        <div>
-          <h2 style="font-size: 0.96rem">Extraction Preview</h2>
+        <div class="row" style="justify-content: space-between; align-items: center">
+          <h2 style="font-size: 0.96rem">Batch Parameters</h2>
+          <button id="refresh-presets" class="secondary">Refresh presets</button>
         </div>
-        <div class="badge-row" id="metrics"></div>
+
+        <div class="grid">
+          <div class="field">
+            <label for="preset">Preset</label>
+            <select id="preset"></select>
+          </div>
+
+          <div class="field">
+            <label for="pattern">Pattern</label>
+            <input id="pattern" placeholder="6x12 random" value="6x12 random" />
+          </div>
+
+          <div class="field">
+            <label for="include-tags">Include tags</label>
+            <input id="include-tags" placeholder="neurofunk, kick_transient_geometry" />
+          </div>
+
+          <div class="field">
+            <label for="exclude-tags">Exclude tags</label>
+            <input id="exclude-tags" placeholder="deprecated, used_up" />
+          </div>
+
+          <div class="field">
+            <label for="profile-id">Chrome profile / account label</label>
+            <input id="profile-id" placeholder="account-A" />
+          </div>
+        </div>
+
         <div class="row">
-          <button id="scan" class="secondary">Refresh preview</button>
-          <button id="copy" class="secondary">Copy raw payload</button>
+          <button id="save-settings" class="secondary">Save profile label</button>
+          <button id="generate" class="primary">Generate</button>
         </div>
-        <textarea id="preview" readonly></textarea>
+      </section>
+
+      <section class="panel">
+        <div class="row" style="justify-content: space-between; align-items: center">
+          <h2 style="font-size: 0.96rem">Prompts</h2>
+          <button id="refresh-prompts" class="secondary">Refresh list</button>
+        </div>
+        <div class="badge-row" id="summary"></div>
+        <div class="prompt-list" id="prompt-list"></div>
       </section>
     </div>
 

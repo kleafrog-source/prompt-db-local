@@ -1,139 +1,245 @@
-const statusNode = document.getElementById('status');
-const previewNode = document.getElementById('preview');
-const metricsNode = document.getElementById('metrics');
-const sendButton = document.getElementById('send');
-const scanButton = document.getElementById('scan');
-const checkButton = document.getElementById('check');
-const copyButton = document.getElementById('copy');
+// @ts-check
 
-let lastExtraction = null;
+const statusNode = document.getElementById('status');
+const presetNode = document.getElementById('preset');
+const patternNode = document.getElementById('pattern');
+const includeTagsNode = document.getElementById('include-tags');
+const excludeTagsNode = document.getElementById('exclude-tags');
+const profileIdNode = document.getElementById('profile-id');
+const generateButton = document.getElementById('generate');
+const refreshPromptsButton = document.getElementById('refresh-prompts');
+const refreshPresetsButton = document.getElementById('refresh-presets');
+const saveSettingsButton = document.getElementById('save-settings');
+const promptListNode = document.getElementById('prompt-list');
+const summaryNode = document.getElementById('summary');
+
+/** @type {Array<{ id: string; label: string; description?: string }>} */
+let exportPresets = [];
+/** @type {Array<any>} */
+let prompts = [];
+
+const splitCsv = (value) =>
+  String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 
 const setStatus = (message, isError = false) => {
   statusNode.textContent = message;
   statusNode.classList.toggle('error', isError);
 };
 
-const renderMetrics = (metrics = {}) => {
-  const items = [
-    `${metrics.promptLikeCount ?? 0} prompt-like hits`,
-    `${metrics.parsedPreviewCount ?? 0} parsed JSON blocks`,
-    `${metrics.scriptCount ?? 0} script sources`,
-    `${metrics.textBlockCount ?? 0} text blocks`,
-  ];
+const sendMessage = (message) =>
+  new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
 
-  metricsNode.innerHTML = items.map((item) => `<span class="badge">${item}</span>`).join('');
-};
+      if (!response?.ok) {
+        reject(new Error(response?.error || 'Extension request failed.'));
+        return;
+      }
 
-const getActiveProducerTab = async () => {
-  const [tab] = await chrome.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
-
-  if (!tab?.id) {
-    throw new Error('Active tab was not found.');
-  }
-
-  return tab;
-};
-
-const extractCurrentPage = async () => {
-  const tab = await getActiveProducerTab();
-  const extraction = await chrome.tabs.sendMessage(tab.id, {
-    type: 'EXTRACT_PRODUCER_JSON',
-  });
-
-  if (!extraction?.ok) {
-    throw new Error(extraction?.error || 'Failed to extract mixed JSON payload from the page.');
-  }
-
-  lastExtraction = extraction.payload;
-  previewNode.value = String(extraction.payload?.rawPayload || '').slice(0, 6000);
-  renderMetrics(extraction.payload);
-
-  return extraction.payload;
-};
-
-const pingLocalApp = async () => {
-  const result = await chrome.runtime.sendMessage({
-    type: 'PING_LOCAL_APP',
-  });
-
-  if (!result?.ok) {
-    throw new Error(result?.error || 'Electron app is unavailable.');
-  }
-
-  return result;
-};
-
-const handleScan = async () => {
-  setStatus('Scanning current producer.ai page...');
-  const payload = await extractCurrentPage();
-  setStatus(
-    payload?.parsedPreviewCount > 0
-      ? `Preview updated. Found ${payload.parsedPreviewCount} parsed JSON blocks.`
-      : 'Preview updated. Mixed text was captured for local parsing.',
-  );
-};
-
-const handleCheck = async () => {
-  setStatus('Checking local Electron websocket...');
-  await pingLocalApp();
-  setStatus('Local Electron app is reachable on ws://127.0.0.1:3001');
-};
-
-const handleSend = async () => {
-  setStatus('Preparing payload and sending it to the local database...');
-  const payload = lastExtraction ?? (await extractCurrentPage());
-  const rawPayload = String(payload?.rawPayload || '').trim();
-
-  if (!rawPayload) {
-    throw new Error('No page payload was extracted.');
-  }
-
-  await pingLocalApp();
-
-  const result = await chrome.runtime.sendMessage({
-    type: 'FORWARD_TO_LOCAL_APP',
-    payload: rawPayload,
-  });
-
-  if (!result?.ok) {
-    throw new Error(result?.error || 'Failed to send payload to Electron.');
-  }
-
-  setStatus(
-    payload?.parsedPreviewCount > 0
-      ? `Sent to Electron. Found ${payload.parsedPreviewCount} parsed JSON blocks on the page.`
-      : 'Sent mixed page payload to Electron for local parsing.',
-  );
-};
-
-const handleCopy = async () => {
-  const payload = lastExtraction ?? (await extractCurrentPage());
-  const rawPayload = String(payload?.rawPayload || '');
-
-  if (!rawPayload.trim()) {
-    throw new Error('Nothing to copy yet.');
-  }
-
-  await navigator.clipboard.writeText(rawPayload);
-  setStatus('Raw mixed payload copied to clipboard.');
-};
-
-const bind = (node, handler) => {
-  node.addEventListener('click', () => {
-    Promise.resolve(handler()).catch((error) => {
-      setStatus(error instanceof Error ? error.message : 'Unexpected extension error.', true);
+      resolve(response);
     });
   });
+
+const renderSummary = () => {
+  const usedCount = prompts.filter((prompt) => prompt.used).length;
+  const freeCount = prompts.length - usedCount;
+
+  summaryNode.innerHTML = [
+    `<span class="badge">${prompts.length} total</span>`,
+    `<span class="badge">${freeCount} unused</span>`,
+    `<span class="badge">${usedCount} used</span>`,
+  ].join('');
 };
 
-bind(scanButton, handleScan);
-bind(checkButton, handleCheck);
-bind(sendButton, handleSend);
-bind(copyButton, handleCopy);
+const createUsedMetaText = (prompt) => {
+  if (!prompt.usedMeta) {
+    return 'New prompt';
+  }
 
-void handleScan().catch((error) => {
-  setStatus(error instanceof Error ? error.message : 'Unable to scan current page.', true);
+  const url = prompt.usedMeta.url ? new URL(prompt.usedMeta.url).host : 'unknown page';
+  const profile = prompt.usedMeta.chromeProfileId || 'default profile';
+
+  return `Used at ${new Date(prompt.usedMeta.usedAt).toLocaleString()} / ${url} / ${profile}`;
+};
+
+const renderPromptList = () => {
+  promptListNode.innerHTML = '';
+
+  if (prompts.length === 0) {
+    promptListNode.innerHTML = '<div class="prompt-card">No generated prompts yet.</div>';
+    renderSummary();
+    return;
+  }
+
+  prompts.forEach((prompt) => {
+    const card = document.createElement('article');
+    card.className = prompt.used ? 'prompt-card used' : 'prompt-card';
+
+    const label = document.createElement('span');
+    label.className = 'pill';
+    label.textContent = `#${prompt.tagNumber || '?'} ${prompt.presetId || 'custom'}`;
+    label.style.color = prompt.tagColor || '#3d7a57';
+
+    const text = document.createElement('div');
+    text.className = 'prompt-text';
+    text.textContent = prompt.text;
+
+    const meta = document.createElement('div');
+    meta.className = 'prompt-meta';
+    meta.textContent = createUsedMetaText(prompt);
+
+    const actions = document.createElement('div');
+    actions.className = 'row';
+
+    const insertButton = document.createElement('button');
+    insertButton.className = prompt.used ? 'secondary' : 'primary';
+    insertButton.textContent = prompt.used ? 'Already used' : 'Insert';
+    insertButton.disabled = Boolean(prompt.used);
+    insertButton.addEventListener('click', () => {
+      Promise.resolve(handleInsertPrompt(prompt.id)).catch((error) => {
+        setStatus(error instanceof Error ? error.message : 'Insert failed.', true);
+      });
+    });
+
+    actions.appendChild(insertButton);
+    card.append(label, text, meta, actions);
+    promptListNode.appendChild(card);
+  });
+
+  renderSummary();
+};
+
+const renderPresetOptions = () => {
+  presetNode.innerHTML = '';
+
+  if (exportPresets.length === 0) {
+    const option = document.createElement('option');
+    option.value = 'default_export';
+    option.textContent = 'default_export';
+    presetNode.appendChild(option);
+    return;
+  }
+
+  exportPresets.forEach((preset) => {
+    const option = document.createElement('option');
+    option.value = preset.id;
+    option.textContent = preset.label || preset.id;
+    presetNode.appendChild(option);
+  });
+};
+
+const refreshPromptState = async () => {
+  const response = await sendMessage({
+    type: 'GET_PROMPTS',
+  });
+
+  prompts = Array.isArray(response.prompts) ? response.prompts : [];
+  renderPromptList();
+};
+
+const refreshExportPresets = async () => {
+  const response = await sendMessage({
+    type: 'GET_EXPORT_PRESETS',
+  });
+
+  exportPresets = Array.isArray(response.presets) ? response.presets : [];
+  renderPresetOptions();
+};
+
+const loadSettings = async () => {
+  const response = await sendMessage({
+    type: 'GET_SETTINGS',
+  });
+
+  profileIdNode.value = response.settings?.chromeProfileId || '';
+};
+
+const saveSettings = async () => {
+  await sendMessage({
+    type: 'UPDATE_SETTINGS',
+    payload: {
+      chromeProfileId: profileIdNode.value.trim(),
+    },
+  });
+  setStatus('Profile label saved.');
+};
+
+const generateBatch = async () => {
+  const payload = {
+    presetId: presetNode.value || 'default_export',
+    pattern: patternNode.value.trim(),
+    tagsInclude: splitCsv(includeTagsNode.value),
+    tagsExclude: splitCsv(excludeTagsNode.value),
+  };
+
+  setStatus('Generating batch from local Electron app...');
+  const response = await sendMessage({
+    type: 'GENERATE_BATCH',
+    payload,
+  });
+
+  prompts = Array.isArray(response.prompts) ? response.prompts : [];
+  renderPromptList();
+  setStatus(`Generated ${prompts.length} prompt(s).`);
+};
+
+const handleInsertPrompt = async (promptId) => {
+  setStatus('Sending prompt to active producer.ai tab...');
+  await sendMessage({
+    type: 'INSERT_PROMPT_REQUEST',
+    payload: { promptId },
+  });
+  setStatus('Prompt inserted. Waiting for page send/highlight sync...');
+};
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type === 'PROMPTS_UPDATED') {
+    prompts = Array.isArray(message.payload?.prompts) ? message.payload.prompts : prompts;
+    renderPromptList();
+    return;
+  }
+
+  if (message?.type === 'SETTINGS_UPDATED') {
+    profileIdNode.value = message.payload?.chromeProfileId || '';
+  }
 });
+
+generateButton.addEventListener('click', () => {
+  void generateBatch().catch((error) => {
+    setStatus(error instanceof Error ? error.message : 'Generate failed.', true);
+  });
+});
+
+refreshPromptsButton.addEventListener('click', () => {
+  void refreshPromptState().catch((error) => {
+    setStatus(error instanceof Error ? error.message : 'Unable to refresh prompts.', true);
+  });
+});
+
+refreshPresetsButton.addEventListener('click', () => {
+  void refreshExportPresets()
+    .then(() => setStatus('Export presets refreshed.'))
+    .catch((error) => {
+      setStatus(error instanceof Error ? error.message : 'Unable to refresh presets.', true);
+    });
+});
+
+saveSettingsButton.addEventListener('click', () => {
+  void saveSettings().catch((error) => {
+    setStatus(error instanceof Error ? error.message : 'Unable to save settings.', true);
+  });
+});
+
+Promise.all([refreshExportPresets(), refreshPromptState(), loadSettings()])
+  .then(() => {
+    setStatus('Extension state loaded.');
+  })
+  .catch((error) => {
+    setStatus(error instanceof Error ? error.message : 'Failed to initialize popup.', true);
+  });

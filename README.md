@@ -7,6 +7,7 @@ Prompt DB Local is a local-first Electron + React application for importing larg
 ### Core capabilities
 
 - Import prompt-like JSON from files or from the Chrome extension over `ws://127.0.0.1:3001`.
+- Serve a local HTTP API for the Chrome extension on `http://127.0.0.1:3210`.
 - Store imported prompt records in IndexedDB through Dexie.
 - Persist service metadata in `.prompt-db-meta/` JSON files through Electron:
   - `tag-registry.json`
@@ -27,6 +28,7 @@ Prompt DB Local is a local-first Electron + React application for importing larg
 ### Main UI panels
 
 - `Import Flow`: file import, websocket status, and websocket self-test
+- `Import Flow`: file import, websocket status, and local HTTP companion info
 - `Tag & Key Explorer`: key/value scan, registry editing, tag application
 - `Sequence Presets`: sequence extraction and preset saving
 - `Prompt Detail`: manual editing of the selected prompt JSON
@@ -71,7 +73,12 @@ npm start
 
 ### Extension sync
 
-The Chrome extension sends extracted payloads to the local app through websocket. The Electron UI now includes a websocket self-test so the sync pipeline can be verified even without manually pushing data from the browser popup.
+The Chrome extension now uses two local channels:
+
+- `ws://127.0.0.1:3001` for raw producer.ai payload ingest
+- `http://127.0.0.1:3210` for `generateBatch`, `promptUsage`, and preset loading
+
+The Electron UI includes a websocket self-test, and the extension popup works as a shared prompt queue for all producer.ai tabs in the same Chrome profile.
 
 ## Русский
 
@@ -80,6 +87,7 @@ Prompt DB Local это локальное Electron + React приложение 
 ### Основные возможности
 
 - Импорт prompt-подобного JSON из файлов и из Chrome extension через `ws://127.0.0.1:3001`.
+- Локальный HTTP API для Chrome extension на `http://127.0.0.1:3210`.
 - Хранение импортированных prompt-записей в IndexedDB через Dexie.
 - Хранение служебных метаданных в JSON-файлах `.prompt-db-meta/` через Electron:
   - `tag-registry.json`
@@ -100,6 +108,7 @@ Prompt DB Local это локальное Electron + React приложение 
 ### Основные панели интерфейса
 
 - `Import Flow`: импорт файлов, статус websocket и self-test канала
+- `Import Flow`: импорт файлов, статус websocket и данные о локальном HTTP companion API
 - `Tag & Key Explorer`: сканирование ключей/значений, редактирование registry, применение тегов
 - `Sequence Presets`: извлечение последовательностей и сохранение пресетов
 - `Prompt Detail`: ручное редактирование выбранного prompt JSON
@@ -144,4 +153,9 @@ npm start
 
 ### Синхронизация extension
 
-Chrome extension отправляет извлечённые данные в локальное приложение через websocket. В Electron UI теперь есть websocket self-test, поэтому канал синхронизации можно проверить даже без ручной отправки из popup extension.
+Теперь Chrome extension использует два локальных канала:
+
+- `ws://127.0.0.1:3001` для ingest сырых producer.ai payload
+- `http://127.0.0.1:3210` для `generateBatch`, `promptUsage` и загрузки пресетов
+
+В Electron UI есть websocket self-test, а popup extension работает как общий список промтов для всех producer.ai вкладок в пределах одного Chrome profile.

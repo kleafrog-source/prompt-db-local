@@ -1,8 +1,17 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import type { Server as HttpServer } from 'node:http';
 import path from 'node:path';
 import WebSocket, { WebSocketServer, type RawData, type WebSocket as ServerWebSocket } from 'ws';
-import { clearMetaState, loadMetaState, saveMetaState, type PromptDbMetaState } from './metaStore';
+import { HTTP_API_PORT, startHttpApiServer } from './httpApi';
+import {
+  clearMetaState,
+  loadMetaState,
+  saveMetaState,
+  savePromptSnapshot,
+  type PromptDbMetaState,
+  type PromptSnapshotRecord,
+} from './metaStore';
 
 type ImportEnvelope = {
   id: string;
@@ -15,6 +24,7 @@ const WS_PORT = 3001;
 const pendingImports: ImportEnvelope[] = [];
 let mainWindow: BrowserWindow | null = null;
 let websocketServer: WebSocketServer | null = null;
+let httpApiServer: HttpServer | null = null;
 let lastWsMessageAt: string | null = null;
 let lastWsSource = 'none';
 
@@ -76,6 +86,8 @@ const startWebSocketServer = () => {
     mainWindow?.webContents.send('ws:status', {
       port: WS_PORT,
       state: 'listening',
+      lastMessageAt: lastWsMessageAt,
+      lastSource: lastWsSource,
     });
   });
 
@@ -83,6 +95,8 @@ const startWebSocketServer = () => {
     mainWindow?.webContents.send('ws:status', {
       port: WS_PORT,
       state: 'closed',
+      lastMessageAt: lastWsMessageAt,
+      lastSource: lastWsSource,
     });
   });
 };
@@ -150,6 +164,10 @@ ipcMain.handle('meta:load-state', async () => loadMetaState());
 ipcMain.handle('meta:save-state', async (_event, payload: PromptDbMetaState) => saveMetaState(payload));
 
 ipcMain.handle('meta:clear-state', async () => clearMetaState());
+
+ipcMain.handle('snapshot:save-prompts', async (_event, payload: PromptSnapshotRecord[]) =>
+  savePromptSnapshot(payload),
+);
 
 ipcMain.handle('ws:run-self-test', async () => {
   const payload = JSON.stringify({
@@ -243,6 +261,7 @@ ipcMain.handle(
 app.whenReady().then(async () => {
   await createWindow();
   startWebSocketServer();
+  httpApiServer = await startHttpApiServer(HTTP_API_PORT);
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -259,4 +278,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   websocketServer?.close();
+  httpApiServer?.close();
 });
