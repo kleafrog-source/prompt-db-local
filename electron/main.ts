@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { WebSocketServer, type RawData, type WebSocket } from 'ws';
+import WebSocket, { WebSocketServer, type RawData, type WebSocket as ServerWebSocket } from 'ws';
+import { clearMetaState, loadMetaState, saveMetaState, type PromptDbMetaState } from './metaStore';
 
 type ImportEnvelope = {
   id: string;
@@ -14,6 +15,8 @@ const WS_PORT = 3001;
 const pendingImports: ImportEnvelope[] = [];
 let mainWindow: BrowserWindow | null = null;
 let websocketServer: WebSocketServer | null = null;
+let lastWsMessageAt: string | null = null;
+let lastWsSource = 'none';
 
 const createEnvelope = (rawJson: string, source = 'unknown'): ImportEnvelope => ({
   id: crypto.randomUUID(),
@@ -23,6 +26,9 @@ const createEnvelope = (rawJson: string, source = 'unknown'): ImportEnvelope => 
 });
 
 const broadcastImport = (payload: ImportEnvelope) => {
+  lastWsMessageAt = payload.receivedAt;
+  lastWsSource = payload.source;
+
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('producer:json-received', payload);
     return;
@@ -48,7 +54,7 @@ const flushPendingImports = () => {
 const startWebSocketServer = () => {
   websocketServer = new WebSocketServer({ port: WS_PORT });
 
-  websocketServer.on('connection', (socket: WebSocket) => {
+  websocketServer.on('connection', (socket: ServerWebSocket) => {
     socket.on('message', (message: RawData) => {
       const raw = message.toString();
 
@@ -135,7 +141,50 @@ ipcMain.handle('dialogs:open-json', async () => {
 ipcMain.handle('ws:get-status', async () => ({
   port: WS_PORT,
   state: websocketServer ? 'listening' : 'stopped',
+  lastMessageAt: lastWsMessageAt,
+  lastSource: lastWsSource,
 }));
+
+ipcMain.handle('meta:load-state', async () => loadMetaState());
+
+ipcMain.handle('meta:save-state', async (_event, payload: PromptDbMetaState) => saveMetaState(payload));
+
+ipcMain.handle('meta:clear-state', async () => clearMetaState());
+
+ipcMain.handle('ws:run-self-test', async () => {
+  const payload = JSON.stringify({
+    source: 'producer.ai-extension:self-test',
+    payload: {
+      name: 'extension sync self test',
+      prompt: 'Confirm websocket pipeline for {{system}}.',
+      variables: ['system'],
+      keywords: ['self-test', 'extension', 'ws'],
+      meta: {
+        generatedAt: new Date().toISOString(),
+      },
+    },
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${WS_PORT}`);
+
+    socket.on('open', () => {
+      socket.send(payload);
+      socket.close();
+      resolve();
+    });
+
+    socket.on('error', (error) => {
+      reject(error);
+    });
+  });
+
+  return {
+    ok: true,
+    wsUrl: `ws://127.0.0.1:${WS_PORT}`,
+    sentAt: new Date().toISOString(),
+  };
+});
 
 ipcMain.handle(
   'dialogs:save-export-file',

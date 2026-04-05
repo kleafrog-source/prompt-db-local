@@ -1,9 +1,8 @@
 import Dexie, { type Table } from 'dexie';
-import type { BatchPresetDraft, BatchPresetRecord } from '@/types/batchPreset';
 import type { PromptDraft, PromptRecord } from '@/types/prompt';
 import { extractKeywords } from '@/utils/keywords';
 
-export const PROMPTS_DB_NAME = 'prompt-db-local-v2';
+export const PROMPTS_DB_NAME = 'prompt-db-local-v3';
 
 const stableSerialize = (value: unknown): string => {
   if (Array.isArray(value)) {
@@ -29,7 +28,6 @@ export const createPromptFingerprint = (value: {
 
 class PromptsDb extends Dexie {
   prompts!: Table<PromptRecord, string>;
-  batchPresets!: Table<BatchPresetRecord, string>;
 
   constructor() {
     super(PROMPTS_DB_NAME);
@@ -65,12 +63,6 @@ class PromptsDb extends Dexie {
             record.fingerprint = createPromptFingerprint(record);
           }),
       );
-
-    this.version(4).stores({
-      prompts: 'id, fingerprint, name, created_at, updated_at, *keywords, *variables',
-      batchPresets:
-        'id, presetName, updated_at, exportFormat, mode, *variableKeys, *outputFields',
-    });
   }
 }
 
@@ -78,7 +70,6 @@ export const promptsDb = new PromptsDb();
 
 export const clearPromptsDb = async () => {
   await promptsDb.prompts.clear();
-  await promptsDb.batchPresets.clear();
 };
 
 export const normalizePromptDraft = (draft: PromptDraft): PromptRecord => {
@@ -103,24 +94,5 @@ export const normalizePromptDraft = (draft: PromptDraft): PromptRecord => {
     created_at: draft.created_at ?? now,
     updated_at: now,
     source: draft.source,
-  };
-};
-
-export const normalizeBatchPresetDraft = (draft: BatchPresetDraft): BatchPresetRecord => {
-  const now = new Date().toISOString();
-
-  return {
-    id: draft.id ?? crypto.randomUUID(),
-    presetName: draft.presetName.trim() || 'Batch preset',
-    files: Math.max(1, Number(draft.files) || 1),
-    items: Math.max(1, Number(draft.items) || 12),
-    mode: draft.mode,
-    query: draft.query.trim(),
-    exportFormat: draft.exportFormat,
-    variableKeys: Array.from(new Set((draft.variableKeys ?? []).map((entry) => entry.trim()).filter(Boolean))),
-    outputFields: Array.from(new Set((draft.outputFields ?? []).map((entry) => entry.trim()).filter(Boolean))),
-    blocklyXml: draft.blocklyXml ?? '',
-    created_at: draft.created_at ?? now,
-    updated_at: now,
   };
 };

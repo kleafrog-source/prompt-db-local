@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import type { Tag } from '@/types/meta';
 import type { PromptRecord } from '@/types/prompt';
 
 type PromptEditorProps = {
   prompt: PromptRecord | null;
+  promptTags: Tag[];
   onSave: (payload: {
     id?: string;
     name: string;
@@ -15,7 +17,7 @@ type PromptEditorProps = {
   onDelete: (promptId: string) => Promise<void>;
 };
 
-export const PromptEditor = ({ prompt, onSave, onDelete }: PromptEditorProps) => {
+export const PromptEditor = ({ prompt, promptTags, onSave, onDelete }: PromptEditorProps) => {
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [jsonText, setJsonText] = useState('{}');
@@ -67,6 +69,20 @@ export const PromptEditor = ({ prompt, onSave, onDelete }: PromptEditorProps) =>
           <h2>Prompt Detail</h2>
         </div>
       </div>
+
+      {promptTags.length > 0 ? (
+        <div className="tag-chip-row tag-chip-row-spaced">
+          {promptTags.map((tag) => (
+            <span
+              key={tag.id}
+              className="tag-chip"
+              style={{ borderColor: tag.color, color: tag.color }}
+            >
+              {tag.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <div className="editor-grid">
         <label className="field">

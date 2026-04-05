@@ -10,6 +10,61 @@ type ImportEnvelope = {
 type WsStatus = {
   port: number;
   state: 'listening' | 'closed' | 'stopped';
+  lastMessageAt: string | null;
+  lastSource: string;
+};
+
+type PromptDbMetaState = {
+  tagRegistry: {
+    tags: Array<{
+      id: string;
+      label: string;
+      color: string;
+      type: 'key' | 'value' | 'semantic';
+    }>;
+  };
+  elementTagBindings: Array<{
+    elementId: string;
+    tags: string[];
+  }>;
+  keySequencePresets: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    sequences: Array<{
+      id: string;
+      pathChain: string[];
+      usageCount: number;
+    }>;
+    generationRules?: {
+      mode: 'random' | 'weighted' | 'sequential';
+      maxBlocks?: number;
+      allowRepetition?: boolean;
+    };
+  }>;
+  exportPresets: Array<{
+    id: string;
+    label: string;
+    description?: string;
+    filters?: {
+      includeTags?: string[];
+      excludeTags?: string[];
+      includeKeys?: string[];
+      excludeKeys?: string[];
+    };
+    composition?: {
+      mode: 'as-is' | 'random-mix' | 'sequence-based';
+      pattern?: string;
+    };
+    slicing?: {
+      useKeySequences?: string[];
+      maxBlocksPerElement?: number;
+    };
+    output?: {
+      fileNamePattern: string;
+      format: 'json';
+    };
+  }>;
 };
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -22,6 +77,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       | null
     >,
   getWsStatus: async () => ipcRenderer.invoke('ws:get-status') as Promise<WsStatus>,
+  runWsSelfTest: async () =>
+    ipcRenderer.invoke('ws:run-self-test') as Promise<{
+      ok: boolean;
+      wsUrl: string;
+      sentAt: string;
+    }>,
+  loadMetaState: async () => ipcRenderer.invoke('meta:load-state') as Promise<PromptDbMetaState>,
+  saveMetaState: async (payload: PromptDbMetaState) =>
+    ipcRenderer.invoke('meta:save-state', payload) as Promise<{
+      directoryPath: string;
+    }>,
+  clearMetaState: async () => ipcRenderer.invoke('meta:clear-state') as Promise<PromptDbMetaState>,
   saveExportFile: async (payload: { defaultFileName: string; content: string }) =>
     ipcRenderer.invoke('dialogs:save-export-file', payload) as Promise<
       | {

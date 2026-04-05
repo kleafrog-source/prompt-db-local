@@ -1,12 +1,14 @@
 import { create } from 'zustand';
-import type { BatchPresetDraft, BatchPresetRecord } from '@/types/batchPreset';
-import {
-  clearPromptsDb,
-  normalizeBatchPresetDraft,
-  normalizePromptDraft,
-  promptsDb,
-} from '@/db/promptsDb';
+import { clearPromptsDb, normalizePromptDraft, promptsDb } from '@/db/promptsDb';
+import type {
+  ElementTagBinding,
+  ExportPreset,
+  KeySequencePreset,
+  PromptDbMetaState,
+  TagRegistry,
+} from '@/types/meta';
 import type { PromptDraft, PromptRecord, PromptSearchFilters } from '@/types/prompt';
+import { createEmptyMetaState } from '@/types/meta';
 import { parseJsonToPrompts } from '@/utils/parser';
 
 type ImportLogEntry = {
@@ -36,31 +38,44 @@ const createImportLogEntry = (
 type WsState = {
   port: number;
   state: 'listening' | 'closed' | 'stopped';
+  lastMessageAt: string | null;
+  lastSource: string;
 };
 
 type PromptStore = {
   prompts: PromptRecord[];
-  batchPresets: BatchPresetRecord[];
+  tagRegistry: TagRegistry;
+  elementTagBindings: ElementTagBinding[];
+  keySequencePresets: KeySequencePreset[];
+  exportPresets: ExportPreset[];
   selectedPromptId: string | null;
   filters: PromptSearchFilters;
   wsStatus: WsState;
   importLog: ImportLogEntry[];
   loadPrompts: () => Promise<void>;
-  loadBatchPresets: () => Promise<void>;
+  loadMetaState: () => Promise<void>;
+  saveMetaState: (next?: Partial<PromptDbMetaState>) => Promise<void>;
   setSelectedPrompt: (promptId: string | null) => void;
   setFilters: (filters: Partial<PromptSearchFilters>) => void;
   savePrompt: (draft: PromptDraft) => Promise<PromptRecord>;
-  saveBatchPreset: (draft: BatchPresetDraft) => Promise<BatchPresetRecord>;
-  deleteBatchPreset: (presetId: string) => Promise<void>;
   deletePrompt: (promptId: string) => Promise<void>;
   importRawJson: (rawJson: string, source: string) => Promise<number>;
   resetDatabase: () => Promise<void>;
   setWsStatus: (status: WsState) => void;
+  setTagRegistry: (tagRegistry: TagRegistry) => void;
+  setElementTagBindings: (bindings: ElementTagBinding[]) => void;
+  setKeySequencePresets: (presets: KeySequencePreset[]) => void;
+  setExportPresets: (presets: ExportPreset[]) => void;
 };
+
+const emptyMeta = createEmptyMetaState();
 
 export const usePromptStore = create<PromptStore>((set, get) => ({
   prompts: [],
-  batchPresets: [],
+  tagRegistry: emptyMeta.tagRegistry,
+  elementTagBindings: emptyMeta.elementTagBindings,
+  keySequencePresets: emptyMeta.keySequencePresets,
+  exportPresets: emptyMeta.exportPresets,
   selectedPromptId: null,
   filters: {
     query: '',
@@ -68,6 +83,8 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
   wsStatus: {
     port: 3001,
     state: 'stopped',
+    lastMessageAt: null,
+    lastSource: 'none',
   },
   importLog: [],
   loadPrompts: async () => {
@@ -81,12 +98,35 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
           : prompts[0]?.id ?? null,
     }));
   },
-  loadBatchPresets: async () => {
-    const batchPresets = await promptsDb.batchPresets.orderBy('updated_at').reverse().toArray();
+  loadMetaState: async () => {
+    if (!window.electronAPI) {
+      return;
+    }
+
+    const metaState = (await window.electronAPI.loadMetaState()) as PromptDbMetaState;
 
     set({
-      batchPresets,
+      tagRegistry: metaState.tagRegistry,
+      elementTagBindings: metaState.elementTagBindings,
+      keySequencePresets: metaState.keySequencePresets,
+      exportPresets: metaState.exportPresets,
     });
+  },
+  saveMetaState: async (next) => {
+    if (!window.electronAPI) {
+      return;
+    }
+
+    const current = get();
+    const payload: PromptDbMetaState = {
+      tagRegistry: next?.tagRegistry ?? current.tagRegistry,
+      elementTagBindings: next?.elementTagBindings ?? current.elementTagBindings,
+      keySequencePresets: next?.keySequencePresets ?? current.keySequencePresets,
+      exportPresets: next?.exportPresets ?? current.exportPresets,
+    };
+
+    await window.electronAPI.saveMetaState(payload);
+    set(payload);
   },
   setSelectedPrompt: (selectedPromptId) => set({ selectedPromptId }),
   setFilters: (filters) =>
@@ -104,20 +144,15 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
     set({ selectedPromptId: prompt.id });
     return prompt;
   },
-  saveBatchPreset: async (draft) => {
-    const batchPreset = normalizeBatchPresetDraft(draft);
-
-    await promptsDb.batchPresets.put(batchPreset);
-    await get().loadBatchPresets();
-    return batchPreset;
-  },
-  deleteBatchPreset: async (presetId) => {
-    await promptsDb.batchPresets.delete(presetId);
-    await get().loadBatchPresets();
-  },
   deletePrompt: async (promptId) => {
     await promptsDb.prompts.delete(promptId);
     await get().loadPrompts();
+    set((state) => ({
+      elementTagBindings: state.elementTagBindings.filter((binding) => binding.elementId !== promptId),
+    }));
+    await get().saveMetaState({
+      elementTagBindings: get().elementTagBindings.filter((binding) => binding.elementId !== promptId),
+    });
   },
   importRawJson: async (rawJson, source) => {
     const receivedAt = new Date().toISOString();
@@ -185,9 +220,17 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
   },
   resetDatabase: async () => {
     await clearPromptsDb();
+
+    if (window.electronAPI) {
+      await window.electronAPI.clearMetaState();
+    }
+
     set({
       prompts: [],
-      batchPresets: [],
+      tagRegistry: emptyMeta.tagRegistry,
+      elementTagBindings: emptyMeta.elementTagBindings,
+      keySequencePresets: emptyMeta.keySequencePresets,
+      exportPresets: emptyMeta.exportPresets,
       selectedPromptId: null,
       importLog: [
         createImportLogEntry(
@@ -195,10 +238,14 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
           new Date().toISOString(),
           0,
           'success',
-          'Cleared all prompts from the current local database.',
+          'Cleared prompts and .prompt-db-meta state.',
         ),
       ],
     });
   },
   setWsStatus: (wsStatus) => set({ wsStatus }),
+  setTagRegistry: (tagRegistry) => set({ tagRegistry }),
+  setElementTagBindings: (elementTagBindings) => set({ elementTagBindings }),
+  setKeySequencePresets: (keySequencePresets) => set({ keySequencePresets }),
+  setExportPresets: (exportPresets) => set({ exportPresets }),
 }));

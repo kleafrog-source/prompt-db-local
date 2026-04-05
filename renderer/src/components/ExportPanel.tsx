@@ -1,21 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BatchPresetBuilder } from '@/components/BatchPresetBuilder';
-import type { BatchPresetConfig } from '@/types/batchPreset';
+import { useMemo, useState } from 'react';
+import type { DBElement, ElementTagBinding, ExportPreset, KeySequencePreset, TagRegistry } from '@/types/meta';
 import type { PromptRecord } from '@/types/prompt';
-import { usePromptStore } from '@/store/promptStore';
-import {
-  EXPORT_FORMATS,
-  EXPORT_MODES,
-  createBatchExportPayload,
-  createDefaultBatchPresetConfig,
-  formatBatchFormula,
-  parseBatchFormula,
-  selectPromptIdsByMode,
-  type ExportMode,
-} from '@/utils/exportPrompts';
+import { generateExport, parseCompositionPattern } from '@/utils/exportComposer';
+import { createTagId } from '@/utils/tagScanner';
 
 type ExportPanelProps = {
   prompts: PromptRecord[];
+  tagRegistry: TagRegistry;
+  bindings: ElementTagBinding[];
+  sequencePresets: KeySequencePreset[];
+  exportPresets: ExportPreset[];
+  onPersistPresets: (presets: ExportPreset[]) => Promise<void>;
 };
 
 const sanitizeFileName = (value: string) =>
@@ -23,367 +18,402 @@ const sanitizeFileName = (value: string) =>
     .replace(/[<>:"/\\|?*]+/g, '_')
     .replace(/\s+/g, '_')
     .replace(/_+/g, '_')
-    .slice(0, 80) || 'prompt_export';
+    .slice(0, 120) || 'prompt_export';
 
-const createConfigFromFormula = (
-  formula: string,
-  mode: ExportMode,
-  current: BatchPresetConfig,
-): BatchPresetConfig => {
-  const parsed = parseBatchFormula(formula, mode);
+const createDefaultPreset = (): ExportPreset => ({
+  id: 'default_export',
+  label: 'Default Export',
+  filters: {
+    includeTags: [],
+    excludeTags: [],
+    includeKeys: [],
+    excludeKeys: [],
+  },
+  composition: {
+    mode: 'as-is',
+    pattern: '3x12 random',
+  },
+  slicing: {
+    useKeySequences: [],
+    maxBlocksPerElement: 4,
+  },
+  output: {
+    fileNamePattern: '{index}_{id}.json',
+    format: 'json',
+  },
+});
 
-  return {
-    ...current,
-    files: parsed.files,
-    items: parsed.items,
-    mode: parsed.mode,
-  };
+const toElements = (prompts: PromptRecord[], bindings: ElementTagBinding[]): DBElement[] => {
+  const bindingsMap = new Map(bindings.map((binding) => [binding.elementId, binding.tags]));
+
+  return prompts.map((prompt) => ({
+    id: prompt.id,
+    raw: prompt.json_data,
+    tagIds: bindingsMap.get(prompt.id) ?? [],
+  }));
 };
 
-const buildPayload = (prompts: PromptRecord[], config: BatchPresetConfig, fileIndex: number) => {
-  const normalizedQuery = config.query.trim().toLowerCase();
-  const scopedPrompts = !normalizedQuery
-    ? prompts
-    : prompts.filter((prompt) => {
-        const haystack = [
-          prompt.name,
-          prompt.text,
-          prompt.keywords.join(' '),
-          prompt.variables.join(' '),
-        ]
-          .join('\n')
-          .toLowerCase();
+const splitCsv = (value: string) =>
+  value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 
-        return haystack.includes(normalizedQuery);
-      });
-  const ids = selectPromptIdsByMode(scopedPrompts, config.mode, config.items);
-
-  return {
-    scopedPrompts,
-    payload: createBatchExportPayload(
-      scopedPrompts,
-      ids,
-      config.mode,
-      fileIndex,
-      config.exportFormat,
-      config.variableKeys,
-      config.outputFields,
-    ),
-  };
-};
-
-export const ExportPanel = ({ prompts }: ExportPanelProps) => {
-  const batchPresets = usePromptStore((state) => state.batchPresets);
-  const saveBatchPreset = usePromptStore((state) => state.saveBatchPreset);
-  const deleteBatchPreset = usePromptStore((state) => state.deleteBatchPreset);
-  const [config, setConfig] = useState<BatchPresetConfig>(createDefaultBatchPresetConfig);
-  const [formula, setFormula] = useState('3x12 random');
-  const [mode, setMode] = useState<ExportMode>('random');
-  const [status, setStatus] = useState('Ready for batch export');
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const [blocklyXml, setBlocklyXml] = useState('');
+export const ExportPanel = ({
+  prompts,
+  tagRegistry,
+  bindings,
+  sequencePresets,
+  exportPresets,
+  onPersistPresets,
+}: ExportPanelProps) => {
+  const [draft, setDraft] = useState<ExportPreset>(createDefaultPreset);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [previewJson, setPreviewJson] = useState('');
-  const [previewItemCount, setPreviewItemCount] = useState(0);
-  const [previewScopeCount, setPreviewScopeCount] = useState(0);
+  const [status, setStatus] = useState('Export presets ready');
 
-  useEffect(() => {
-    setFormula(formatBatchFormula(config.files, config.items, config.mode));
-    setMode(config.mode);
-  }, [config.files, config.items, config.mode]);
+  const elements = useMemo(() => toElements(prompts, bindings), [prompts, bindings]);
+  const patternInfo = parseCompositionPattern(draft.composition?.pattern);
 
-  const scopedPromptsCount = useMemo(
-    () => buildPayload(prompts, config, 1).scopedPrompts.length,
-    [config, prompts],
-  );
-
-  const activeFormat = EXPORT_FORMATS.find((entry) => entry.key === config.exportFormat);
-
-  const handleConfigChange = (nextConfig: BatchPresetConfig, nextBlocklyXml: string) => {
-    setConfig(nextConfig);
-    setBlocklyXml(nextBlocklyXml);
-    setSelectedPresetId(null);
-  };
-
-  const handleApplyFormula = (nextFormula: string, nextMode: ExportMode) => {
-    setFormula(nextFormula);
-    setMode(nextMode);
-    setConfig((current) => createConfigFromFormula(nextFormula, nextMode, current));
-  };
-
-  const handleSelectPreset = (presetId: string | null) => {
+  const handleSelectPreset = (presetId: string) => {
     setSelectedPresetId(presetId);
 
     if (!presetId) {
-      setStatus('Switched to unsaved workspace');
+      setDraft(createDefaultPreset());
+      setStatus('Switched to unsaved export preset');
       return;
     }
 
-    const preset = batchPresets.find((entry) => entry.id === presetId);
+    const preset = exportPresets.find((entry) => entry.id === presetId);
 
     if (!preset) {
       return;
     }
 
-    setConfig({
-      presetName: preset.presetName,
-      files: preset.files,
-      items: preset.items,
-      mode: preset.mode,
-      query: preset.query,
-      exportFormat: preset.exportFormat,
-      variableKeys: preset.variableKeys,
-      outputFields: preset.outputFields,
-    });
-    setBlocklyXml(preset.blocklyXml);
-    setStatus(`Loaded preset "${preset.presetName}"`);
+    setDraft(preset);
+    setStatus(`Loaded export preset "${preset.label}"`);
   };
 
-  const handleSavePreset = async (nextBlocklyXml: string) => {
-    const saved = await saveBatchPreset({
-      id: selectedPresetId ?? undefined,
-      ...config,
-      blocklyXml: nextBlocklyXml || blocklyXml,
-    });
+  const handleSavePreset = async () => {
+    const nextPreset = {
+      ...draft,
+      id: draft.id || createTagId(draft.label || `export_${exportPresets.length + 1}`),
+    };
 
-    setSelectedPresetId(saved.id);
-    setBlocklyXml(saved.blocklyXml);
-    setStatus(`Preset "${saved.presetName}" saved`);
+    await onPersistPresets(
+      [...exportPresets.filter((preset) => preset.id !== nextPreset.id), nextPreset].sort((left, right) =>
+        left.label.localeCompare(right.label),
+      ),
+    );
+    setDraft(nextPreset);
+    setSelectedPresetId(nextPreset.id);
+    setStatus(`Saved export preset "${nextPreset.label}"`);
   };
 
-  const handleDeletePreset = async (presetId: string) => {
-    const preset = batchPresets.find((entry) => entry.id === presetId);
-    await deleteBatchPreset(presetId);
-    setSelectedPresetId(null);
-    setStatus(preset ? `Deleted preset "${preset.presetName}"` : 'Preset deleted');
+  const handleDeletePreset = async () => {
+    if (!selectedPresetId) {
+      return;
+    }
+
+    const preset = exportPresets.find((entry) => entry.id === selectedPresetId);
+    await onPersistPresets(exportPresets.filter((entry) => entry.id !== selectedPresetId));
+    setSelectedPresetId('');
+    setDraft(createDefaultPreset());
+    setStatus(preset ? `Deleted export preset "${preset.label}"` : 'Deleted export preset');
   };
 
-  const handleUpdatePreview = () => {
-    const { scopedPrompts, payload } = buildPayload(prompts, config, 1);
-    setPreviewJson(JSON.stringify(payload, null, 2));
-    setPreviewItemCount(payload.itemCount);
-    setPreviewScopeCount(scopedPrompts.length);
-    setStatus('Preview updated');
+  const handleUpdatePreview = async () => {
+    const files = await generateExport(elements, draft, tagRegistry, sequencePresets);
+    setPreviewJson(JSON.stringify(files[0]?.content ?? {}, null, 2));
+    setStatus(`Preview updated for ${files.length} file(s)`);
   };
 
-  const handleExportSingle = async () => {
+  const handleExport = async () => {
     if (!window.electronAPI) {
       setStatus('Electron bridge is unavailable');
       return;
     }
 
-    const { payload } = buildPayload(prompts, config, 1);
-    const fileName = `prompt_export__${config.exportFormat}__${config.mode}__${payload.itemCount}.json`;
-    const result = await window.electronAPI.saveExportFile({
-      defaultFileName: sanitizeFileName(fileName),
-      content: JSON.stringify(payload, null, 2),
-    });
-
-    if (!result) {
-      setStatus('Single export cancelled');
-      return;
-    }
-
-    setStatus(`Saved export file to ${result.filePath}`);
-  };
-
-  const handleExportBatch = async () => {
-    if (!window.electronAPI) {
-      setStatus('Electron bridge is unavailable');
-      return;
-    }
-
-    const files = Array.from({ length: config.files }, (_value, index) => {
-      const { payload } = buildPayload(prompts, config, index + 1);
-
-      return {
-        fileName: sanitizeFileName(
-          `batch_${String(index + 1).padStart(2, '0')}__${config.exportFormat}__${config.mode}__${payload.itemCount}.json`,
-        ),
-        content: JSON.stringify(payload, null, 2),
-      };
-    });
-
+    const files = await generateExport(elements, draft, tagRegistry, sequencePresets);
     const result = await window.electronAPI.exportBatchFiles({
       defaultFolderName: sanitizeFileName(
-        `prompt_batch_${config.files}x${config.items}_${config.exportFormat}_${config.mode}_${Date.now()}`,
+        `${draft.label}_${draft.composition?.mode || 'as_is'}_${Date.now()}`,
       ),
-      files,
+      files: files.map((file) => ({
+        fileName: sanitizeFileName(file.fileName),
+        content: JSON.stringify(file.content, null, 2),
+      })),
     });
 
     if (!result) {
-      setStatus('Batch export cancelled');
+      setStatus('Export cancelled');
       return;
     }
 
-    setStatus(`Exported ${result.count} file(s) to ${result.directoryPath}`);
+    setStatus(`Exported ${result.count} generated file(s) to ${result.directoryPath}`);
   };
 
   return (
-    <>
-      <BatchPresetBuilder
-        prompts={prompts}
-        config={config}
-        workspaceXml={blocklyXml}
-        presets={batchPresets}
-        selectedPresetId={selectedPresetId}
-        onConfigChange={handleConfigChange}
-        onSelectPreset={handleSelectPreset}
-        onSavePreset={handleSavePreset}
-        onDeletePreset={handleDeletePreset}
-      />
-
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Export</p>
-            <h2>Batch Generator</h2>
-          </div>
-          <span className="badge">{status}</span>
+    <section className="panel">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Composer</p>
+          <h2>Export Presets</h2>
         </div>
+        <span className="badge">{status}</span>
+      </div>
 
-        <p className="panel-copy">
-          Preview updates are manual now. Change config freely, then press <code>Update preview</code>{' '}
-          when you want a fresh export snapshot.
-        </p>
+      <p className="panel-copy">
+        Build exports from tags, keys, and saved sequence presets. This panel replaces the old
+        visual batch generator with a tag/sequence-driven flow.
+      </p>
 
-        <div className="editor-grid">
-          <label className="field">
-            <span>Batch formula</span>
-            <input
-              value={formula}
-              onChange={(event) => handleApplyFormula(event.target.value, mode)}
-            />
-          </label>
+      <div className="editor-grid">
+        <label className="field">
+          <span>Saved preset</span>
+          <select value={selectedPresetId} onChange={(event) => handleSelectPreset(event.target.value)}>
+            <option value="">Unsaved preset</option>
+            {exportPresets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
-          <label className="field">
-            <span>Selection mode</span>
-            <select
-              value={mode}
-              onChange={(event) => handleApplyFormula(formula, event.target.value as ExportMode)}
-            >
-              {EXPORT_MODES.map((entry) => (
-                <option key={entry} value={entry}>
-                  {entry}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field field-full">
-            <span>Preset name</span>
-            <input
-              value={config.presetName}
-              onChange={(event) =>
-                setConfig((current) => ({
-                  ...current,
-                  presetName: event.target.value,
-                }))
-              }
-            />
-          </label>
-
-          <label className="field field-full">
-            <span>Optional filter by name, text, keyword, or variable</span>
-            <input
-              value={config.query}
-              onChange={(event) =>
-                setConfig((current) => ({
-                  ...current,
-                  query: event.target.value,
-                }))
-              }
-              placeholder="cinematic, hook, system, persona..."
-            />
-          </label>
-
-          <label className="field">
-            <span>Export format</span>
-            <select
-              value={config.exportFormat}
-              onChange={(event) =>
-                setConfig((current) => ({
-                  ...current,
-                  exportFormat: event.target.value as BatchPresetConfig['exportFormat'],
-                }))
-              }
-            >
-              {EXPORT_FORMATS.map((entry) => (
-                <option key={entry.key} value={entry.key}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Variable keys included in export</span>
-            <input
-              value={config.variableKeys.join(', ')}
-              onChange={(event) =>
-                setConfig((current) => ({
-                  ...current,
-                  variableKeys: event.target.value
-                    .split(',')
-                    .map((entry) => entry.trim())
-                    .filter(Boolean),
-                }))
-              }
-              placeholder="subject, style, audience"
-            />
-          </label>
-
-          <label className="field field-full">
-            <span>Output fields included in export</span>
-            <input
-              value={config.outputFields.join(', ')}
-              onChange={(event) =>
-                setConfig((current) => ({
-                  ...current,
-                  outputFields: event.target.value
-                    .split(',')
-                    .map((entry) => entry.trim())
-                    .filter(Boolean),
-                }))
-              }
-              placeholder="name, text, keywords, json_data.meta.category"
-            />
-          </label>
-        </div>
-
-        <div className="button-row">
-          <button type="button" className="secondary-button" onClick={handleUpdatePreview}>
-            Update preview
-          </button>
-          <button type="button" className="secondary-button" onClick={() => void handleExportSingle()}>
-            Save preview JSON
-          </button>
-          <button type="button" className="primary-button" onClick={() => void handleExportBatch()}>
-            Export batch folder
-          </button>
-        </div>
-
-        <div className="export-stats">
-          <span>{scopedPromptsCount} prompts in current export scope</span>
-          <span>{config.files} file(s)</span>
-          <span>{config.items} JSON item(s) per file</span>
-          <span>{previewJson ? `${previewItemCount} item(s) in preview` : 'Preview not updated yet'}</span>
-          <span>{activeFormat?.label ?? config.exportFormat}</span>
-          {previewJson ? <span>{previewScopeCount} prompts captured in last preview</span> : null}
-        </div>
-
-        <p className="panel-copy compact-copy">
-          {activeFormat?.description ?? 'Custom export format selected.'}
-        </p>
-
-        <label className="field field-full">
-          <span>Preview payload</span>
-          <textarea
-            value={previewJson || 'Preview is not generated yet. Click "Update preview".'}
-            readOnly
-            rows={16}
+        <label className="field">
+          <span>Preset label</span>
+          <input
+            value={draft.label}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                label: event.target.value,
+                id: current.id || createTagId(event.target.value),
+              }))
+            }
           />
         </label>
-      </section>
-    </>
+
+        <label className="field field-full">
+          <span>Description</span>
+          <textarea
+            value={draft.description ?? ''}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                description: event.target.value,
+              }))
+            }
+            rows={3}
+          />
+        </label>
+
+        <label className="field">
+          <span>Composition mode</span>
+          <select
+            value={draft.composition?.mode ?? 'as-is'}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                composition: {
+                  ...current.composition,
+                  mode: event.target.value as NonNullable<ExportPreset['composition']>['mode'],
+                },
+              }))
+            }
+          >
+            <option value="as-is">as-is</option>
+            <option value="random-mix">random-mix</option>
+            <option value="sequence-based">sequence-based</option>
+          </select>
+        </label>
+
+        <label className="field">
+          <span>Pattern</span>
+          <input
+            value={draft.composition?.pattern ?? ''}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                composition: {
+                  mode: current.composition?.mode ?? 'as-is',
+                  pattern: event.target.value,
+                },
+              }))
+            }
+            placeholder="6x12 random"
+          />
+        </label>
+
+        <label className="field">
+          <span>Include tags</span>
+          <input
+            value={(draft.filters?.includeTags ?? []).join(', ')}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                filters: {
+                  ...current.filters,
+                  includeTags: splitCsv(event.target.value),
+                },
+              }))
+            }
+            placeholder={tagRegistry.tags.slice(0, 4).map((tag) => tag.id).join(', ')}
+          />
+        </label>
+
+        <label className="field">
+          <span>Exclude tags</span>
+          <input
+            value={(draft.filters?.excludeTags ?? []).join(', ')}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                filters: {
+                  ...current.filters,
+                  excludeTags: splitCsv(event.target.value),
+                },
+              }))
+            }
+          />
+        </label>
+
+        <label className="field">
+          <span>Include keys</span>
+          <input
+            value={(draft.filters?.includeKeys ?? []).join(', ')}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                filters: {
+                  ...current.filters,
+                  includeKeys: splitCsv(event.target.value),
+                },
+              }))
+            }
+          />
+        </label>
+
+        <label className="field">
+          <span>Exclude keys</span>
+          <input
+            value={(draft.filters?.excludeKeys ?? []).join(', ')}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                filters: {
+                  ...current.filters,
+                  excludeKeys: splitCsv(event.target.value),
+                },
+              }))
+            }
+          />
+        </label>
+
+        <label className="field">
+          <span>Max blocks per element</span>
+          <input
+            type="number"
+            min={1}
+            value={draft.slicing?.maxBlocksPerElement ?? 4}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                slicing: {
+                  ...current.slicing,
+                  maxBlocksPerElement: Math.max(1, Number(event.target.value) || 1),
+                },
+              }))
+            }
+          />
+        </label>
+
+        <label className="field">
+          <span>File name pattern</span>
+          <input
+            value={draft.output?.fileNamePattern ?? '{index}_{id}.json'}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                output: {
+                  fileNamePattern: event.target.value,
+                  format: 'json',
+                },
+              }))
+            }
+          />
+        </label>
+
+        <label className="field field-full">
+          <span>Sequence presets used for sequence-based mode</span>
+          <div className="check-grid">
+            {sequencePresets.map((preset) => {
+              const checked = draft.slicing?.useKeySequences?.includes(preset.id) ?? false;
+
+              return (
+                <label key={preset.id} className="check-card">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setDraft((current) => {
+                        const currentIds = new Set(current.slicing?.useKeySequences ?? []);
+
+                        if (currentIds.has(preset.id)) {
+                          currentIds.delete(preset.id);
+                        } else {
+                          currentIds.add(preset.id);
+                        }
+
+                        return {
+                          ...current,
+                          slicing: {
+                            ...current.slicing,
+                            useKeySequences: [...currentIds],
+                          },
+                        };
+                      })
+                    }
+                  />
+                  <span>{preset.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </label>
+      </div>
+
+      <div className="button-row">
+        <button type="button" className="secondary-button" onClick={() => void handleSavePreset()}>
+          Save preset
+        </button>
+        <button type="button" className="secondary-button" onClick={() => void handleDeletePreset()} disabled={!selectedPresetId}>
+          Delete preset
+        </button>
+        <button type="button" className="secondary-button" onClick={() => void handleUpdatePreview()}>
+          Update preview
+        </button>
+        <button type="button" className="primary-button" onClick={() => void handleExport()}>
+          Export generated files
+        </button>
+      </div>
+
+      <div className="export-stats">
+        <span>{elements.length} DB elements available</span>
+        <span>{patternInfo.files} file(s)</span>
+        <span>{patternInfo.items} item(s) per file</span>
+        <span>{draft.composition?.mode ?? 'as-is'}</span>
+      </div>
+
+      <label className="field field-full">
+        <span>Preview payload</span>
+        <textarea
+          value={previewJson || 'Preview is not generated yet. Click "Update preview".'}
+          readOnly
+          rows={16}
+        />
+      </label>
+    </section>
   );
 };

@@ -2,21 +2,35 @@
 
 ## English
 
-Prompt DB Local is a local-first Electron + React workspace for collecting, cleaning, editing, and exporting prompt JSON data. It is designed for teams that receive noisy prompt payloads from browser tooling, curate them in a desktop database, and generate structured export batches for downstream pipelines.
+Prompt DB Local is a local-first Electron + React application for importing large mixed JSON payloads, storing prompt-like blocks locally, scanning them for reusable tags and key chains, and generating new export files from saved presets.
 
 ### Core capabilities
 
-- Import prompt-like JSON from local files or websocket events.
-- Store prompts locally in IndexedDB through Dexie.
-- Edit prompt records manually or through a visual Blockly editor.
-- Build batch export presets in Blockly and save them inside the local database.
-- Export prompt batches in several formats:
-  - `full_bundle`
-  - `prompt_cards`
-  - `variable_catalog`
-  - `keyword_matrix`
-  - `runtime_bundle`
-- Merge prompts by formula for quick composition workflows.
+- Import prompt-like JSON from files or from the Chrome extension over `ws://127.0.0.1:3001`.
+- Store imported prompt records in IndexedDB through Dexie.
+- Persist service metadata in `.prompt-db-meta/` JSON files through Electron:
+  - `tag-registry.json`
+  - `element-tag-bindings.json`
+  - `key-sequence-presets.json`
+  - `export-presets.json`
+- Scan the DB for:
+  - frequent keys
+  - normalized short values
+  - reusable nested key sequences
+- Curate a global tag registry and apply tags back to DB elements.
+- Save sequence presets and export presets.
+- Generate exports in three modes:
+  - `as-is`
+  - `random-mix`
+  - `sequence-based`
+
+### Main UI panels
+
+- `Import Flow`: file import, websocket status, and websocket self-test
+- `Tag & Key Explorer`: key/value scan, registry editing, tag application
+- `Sequence Presets`: sequence extraction and preset saving
+- `Prompt Detail`: manual editing of the selected prompt JSON
+- `Export Presets`: tag/key/sequence-based export generation
 
 ### Tech stack
 
@@ -25,93 +39,96 @@ Prompt DB Local is a local-first Electron + React workspace for collecting, clea
 - TypeScript
 - Vite
 - Dexie / IndexedDB
-- Blockly
 - Zustand
+- WebSocket (`ws`)
 
 ### Project structure
 
-- `electron/` Electron main process and preload bridge
-- `renderer/` React application
-- `renderer/src/components/` UI panels and Blockly editors
-- `renderer/src/db/` Dexie schema and normalization helpers
-- `renderer/src/utils/` parsing, export, merge, and Blockly helpers
-- `scripts/` development launch scripts
+- `electron/` Electron main process, preload bridge, meta file storage
+- `renderer/src/components/` application panels
+- `renderer/src/db/` Dexie prompt storage
+- `renderer/src/store/` Zustand store
+- `renderer/src/types/` prompt and metadata types
+- `renderer/src/utils/tagScanner.ts` DB key/value scanner
+- `renderer/src/utils/tagRegistry.ts` tag registry and binding engine
+- `renderer/src/utils/keySequenceEngine.ts` path and sequence extraction
+- `renderer/src/utils/exportComposer.ts` generated export composition
+- `extension/` Chrome extension for producer.ai page extraction
 
-### Local development
+### Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-### Production build
+### Build and run
 
 ```bash
 npm run build
 npm start
 ```
 
-### Batch Generator presets
+### Extension sync
 
-The Batch Generator now includes a dedicated Blockly builder for export presets. Each preset can store:
-
-- preset name
-- file count
-- item count
-- selection mode
-- text filter
-- export format
-- selected variable keys
-- selected output fields
-
-Presets are saved in the local Dexie database and can be reused without re-entering the configuration.
-
-### Export formats
-
-- `full_bundle`: full prompt records with source JSON and selected DB-driven fields
-- `prompt_cards`: compact prompt review objects
-- `variable_catalog`: groups prompts by variable keys
-- `keyword_matrix`: groups prompts by keywords and related variable usage
-- `runtime_bundle`: application-oriented payload with selected output fields and variable defaults
+The Chrome extension sends extracted payloads to the local app through websocket. The Electron UI now includes a websocket self-test so the sync pipeline can be verified even without manually pushing data from the browser popup.
 
 ## Русский
 
-Prompt DB Local это локальное Electron + React приложение для сбора, очистки, редактирования и экспорта prompt JSON-данных. Приложение подходит для сценария, где команда получает «шумные» JSON-пакеты из браузерных инструментов, сохраняет их в локальную БД и формирует структурированные batch-экспорты для дальнейших пайплайнов.
+Prompt DB Local это локальное Electron + React приложение для импорта больших смешанных JSON-пакетов, хранения prompt-подобных блоков, анализа их структуры и генерации новых экспортов на основе тегов, последовательностей ключей и сохранённых пресетов.
 
 ### Основные возможности
 
-- Импорт prompt-подобного JSON из файлов и websocket-событий.
-- Локальное хранение prompt-записей в IndexedDB через Dexie.
-- Ручное редактирование и визуальное редактирование через Blockly.
-- Визуальная сборка пресетов Batch Generator в Blockly с сохранением в локальной БД.
-- Экспорт batch-наборов в нескольких форматах:
-  - `full_bundle`
-  - `prompt_cards`
-  - `variable_catalog`
-  - `keyword_matrix`
-  - `runtime_bundle`
-- Объединение prompt-записей по формуле для быстрых compositing-сценариев.
+- Импорт prompt-подобного JSON из файлов и из Chrome extension через `ws://127.0.0.1:3001`.
+- Хранение импортированных prompt-записей в IndexedDB через Dexie.
+- Хранение служебных метаданных в JSON-файлах `.prompt-db-meta/` через Electron:
+  - `tag-registry.json`
+  - `element-tag-bindings.json`
+  - `key-sequence-presets.json`
+  - `export-presets.json`
+- Сканирование базы для поиска:
+  - часто встречающихся ключей
+  - нормализованных коротких значений
+  - повторяющихся вложенных последовательностей ключей
+- Ведение глобального реестра тегов и применение тегов к элементам БД.
+- Сохранение sequence presets и export presets.
+- Генерация экспортов в трёх режимах:
+  - `as-is`
+  - `random-mix`
+  - `sequence-based`
 
-### Технологический стек
+### Основные панели интерфейса
+
+- `Import Flow`: импорт файлов, статус websocket и self-test канала
+- `Tag & Key Explorer`: сканирование ключей/значений, редактирование registry, применение тегов
+- `Sequence Presets`: извлечение последовательностей и сохранение пресетов
+- `Prompt Detail`: ручное редактирование выбранного prompt JSON
+- `Export Presets`: генерация экспортов по тегам, ключам и последовательностям
+
+### Технологии
 
 - Electron
 - React 19
 - TypeScript
 - Vite
 - Dexie / IndexedDB
-- Blockly
 - Zustand
+- WebSocket (`ws`)
 
 ### Структура проекта
 
-- `electron/` главный процесс Electron и preload bridge
-- `renderer/` React-приложение
-- `renderer/src/components/` UI-панели и Blockly-редакторы
-- `renderer/src/db/` схема Dexie и нормализация данных
-- `renderer/src/utils/` парсинг, экспорт, merge-логика и Blockly-утилиты
-- `scripts/` скрипты запуска для разработки
+- `electron/` главный процесс Electron, preload bridge, файловое meta-хранилище
+- `renderer/src/components/` панели приложения
+- `renderer/src/db/` хранилище prompt-записей на Dexie
+- `renderer/src/store/` Zustand store
+- `renderer/src/types/` типы prompt и meta-структур
+- `renderer/src/utils/tagScanner.ts` сканер ключей и значений БД
+- `renderer/src/utils/tagRegistry.ts` реестр тегов и движок привязок
+- `renderer/src/utils/keySequenceEngine.ts` извлечение путей и последовательностей
+- `renderer/src/utils/exportComposer.ts` генератор новых export-файлов
+- `extension/` Chrome extension для извлечения данных со страниц producer.ai
 
-### Локальная разработка
+### Разработка
 
 ```bash
 npm install
@@ -125,25 +142,6 @@ npm run build
 npm start
 ```
 
-### Пресеты Batch Generator
+### Синхронизация extension
 
-Теперь Batch Generator включает отдельный Blockly-конструктор пресетов экспорта. В каждом пресете можно сохранить:
-
-- имя пресета
-- количество файлов
-- количество элементов в файле
-- режим выборки
-- текстовый фильтр
-- формат экспорта
-- выбранные variable keys
-- выбранные output fields
-
-Пресеты сохраняются в локальной базе Dexie и могут повторно использоваться без ручной перенастройки.
-
-### Форматы экспорта
-
-- `full_bundle`: полный экспорт prompt-записей вместе с исходным JSON и выбранными полями из БД
-- `prompt_cards`: компактные объекты для просмотра и ревью
-- `variable_catalog`: группировка prompt-записей по переменным
-- `keyword_matrix`: группировка по ключевым словам и связанным переменным
-- `runtime_bundle`: прикладной формат с выбранными выходными полями и дефолтами переменных
+Chrome extension отправляет извлечённые данные в локальное приложение через websocket. В Electron UI теперь есть websocket self-test, поэтому канал синхронизации можно проверить даже без ручной отправки из popup extension.

@@ -1,9 +1,11 @@
+import type { Tag } from '@/types/meta';
 import type { PromptRecord } from '@/types/prompt';
 
 type PromptListProps = {
   prompts: PromptRecord[];
   selectedPromptId: string | null;
   searchQuery: string;
+  resolveTags: (promptId: string) => Tag[];
   onSearchChange: (value: string) => void;
   onSelectPrompt: (promptId: string) => void;
 };
@@ -12,6 +14,7 @@ export const PromptList = ({
   prompts,
   selectedPromptId,
   searchQuery,
+  resolveTags,
   onSearchChange,
   onSelectPrompt,
 }: PromptListProps) => (
@@ -29,7 +32,7 @@ export const PromptList = ({
       <input
         value={searchQuery}
         onChange={(event) => onSearchChange(event.target.value)}
-        placeholder="keyword, title, variable"
+        placeholder="keyword, title, variable, tag"
       />
     </label>
 
@@ -44,6 +47,19 @@ export const PromptList = ({
           <strong>{prompt.name}</strong>
           <span>{prompt.text.slice(0, 120) || 'No text yet'}</span>
           <small>{prompt.keywords.slice(0, 4).join(' • ')}</small>
+          <div className="tag-chip-row">
+            {resolveTags(prompt.id)
+              .slice(0, 6)
+              .map((tag) => (
+                <span
+                  key={tag.id}
+                  className="tag-chip"
+                  style={{ borderColor: tag.color, color: tag.color }}
+                >
+                  {tag.label}
+                </span>
+              ))}
+          </div>
         </button>
       ))}
 

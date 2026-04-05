@@ -1,21 +1,28 @@
 import { useEffect } from 'react';
-import { BlocklyEditor } from '@/components/BlocklyEditor';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ImportPanel } from '@/components/ImportPanel';
 import { MergePanel } from '@/components/MergePanel';
 import { PromptEditor } from '@/components/PromptEditor';
 import { PromptList } from '@/components/PromptList';
+import { SequencePresetsPanel } from '@/components/SequencePresetsPanel';
+import { TagKeyExplorer } from '@/components/TagKeyExplorer';
 import { usePrompts } from '@/hooks/usePrompts';
 import { usePromptStore } from '@/store/promptStore';
+import type { ElementTagBinding, ExportPreset, KeySequencePreset, TagRegistry } from '@/types/meta';
 
 const App = () => {
-  const { filteredPrompts, prompts, selectedPrompt } = usePrompts();
+  const { filteredPrompts, prompts, selectedPrompt, selectedPromptTags, tagsByPromptId } = usePrompts();
   const filters = usePromptStore((state) => state.filters);
   const selectedPromptId = usePromptStore((state) => state.selectedPromptId);
   const wsStatus = usePromptStore((state) => state.wsStatus);
   const importLog = usePromptStore((state) => state.importLog);
+  const tagRegistry = usePromptStore((state) => state.tagRegistry);
+  const elementTagBindings = usePromptStore((state) => state.elementTagBindings);
+  const keySequencePresets = usePromptStore((state) => state.keySequencePresets);
+  const exportPresets = usePromptStore((state) => state.exportPresets);
   const loadPrompts = usePromptStore((state) => state.loadPrompts);
-  const loadBatchPresets = usePromptStore((state) => state.loadBatchPresets);
+  const loadMetaState = usePromptStore((state) => state.loadMetaState);
+  const saveMetaState = usePromptStore((state) => state.saveMetaState);
   const setSelectedPrompt = usePromptStore((state) => state.setSelectedPrompt);
   const setFilters = usePromptStore((state) => state.setFilters);
   const savePrompt = usePromptStore((state) => state.savePrompt);
@@ -26,7 +33,7 @@ const App = () => {
 
   useEffect(() => {
     void loadPrompts();
-    void loadBatchPresets();
+    void loadMetaState();
 
     if (!window.electronAPI) {
       return;
@@ -38,6 +45,7 @@ const App = () => {
       void importRawJson(payload.rawJson, payload.source).catch((error) => {
         console.error('Failed to import websocket payload', error);
       });
+      void window.electronAPI?.getWsStatus().then(setWsStatus);
     });
     const unsubscribeWs = window.electronAPI.onWsStatus((payload) => {
       setWsStatus(payload);
@@ -47,7 +55,7 @@ const App = () => {
       unsubscribeImport();
       unsubscribeWs();
     };
-  }, [importRawJson, loadBatchPresets, loadPrompts, setWsStatus]);
+  }, [importRawJson, loadMetaState, loadPrompts, setWsStatus]);
 
   const handleImportFile = async () => {
     const results = await window.electronAPI?.openJsonFile();
@@ -65,16 +73,53 @@ const App = () => {
     }
   };
 
+  const handleRunSyncSelfTest = async () => {
+    if (!window.electronAPI) {
+      return;
+    }
+
+    await window.electronAPI.runWsSelfTest();
+    const status = await window.electronAPI.getWsStatus();
+    setWsStatus(status);
+  };
+
+  const persistRegistryAndBindings = async (
+    nextTagRegistry: TagRegistry,
+    nextBindings: ElementTagBinding[],
+  ) => {
+    await saveMetaState({
+      tagRegistry: nextTagRegistry,
+      elementTagBindings: nextBindings,
+    });
+  };
+
+  const persistSequencePresets = async (presets: KeySequencePreset[]) => {
+    await saveMetaState({
+      keySequencePresets: presets,
+    });
+  };
+
+  const persistExportPresets = async (presets: ExportPreset[]) => {
+    await saveMetaState({
+      exportPresets: presets,
+    });
+  };
+
+  const resolvePromptTags = (promptId: string) =>
+    (tagsByPromptId.get(promptId) ?? [])
+      .map((tagId) => tagRegistry.tags.find((tag) => tag.id === tagId))
+      .filter((tag): tag is (typeof tagRegistry.tags)[number] => tag !== undefined);
+
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
           <p className="eyebrow">Local Prompt Organism</p>
-          <h1>Electron + React + IndexedDB prompt laboratory</h1>
+          <h1>Electron prompt laboratory with tags, key sequences, and generated exports</h1>
         </div>
         <p className="hero-copy">
-          A local-first workspace for parsing messy JSON, curating prompts, and accepting imports
-          from a Chrome extension over websocket.
+          A local-first workspace for parsing messy JSON, detecting structural patterns, curating
+          tags, and generating new exports from imported rule blocks over Chrome extension sync.
         </p>
       </section>
 
@@ -83,6 +128,7 @@ const App = () => {
           prompts={filteredPrompts}
           selectedPromptId={selectedPromptId}
           searchQuery={filters.query}
+          resolveTags={resolvePromptTags}
           onSearchChange={(value) => setFilters({ query: value })}
           onSelectPrompt={setSelectedPrompt}
         />
@@ -91,13 +137,30 @@ const App = () => {
           <ImportPanel
             wsState={wsStatus.state}
             wsPort={wsStatus.port}
+            lastWsMessageAt={wsStatus.lastMessageAt}
+            lastWsSource={wsStatus.lastSource}
             importLog={importLog}
             onImportFile={handleImportFile}
             onResetDatabase={resetDatabase}
+            onRunSyncSelfTest={handleRunSyncSelfTest}
+          />
+
+          <TagKeyExplorer
+            prompts={prompts}
+            tagRegistry={tagRegistry}
+            bindings={elementTagBindings}
+            onPersist={persistRegistryAndBindings}
+          />
+
+          <SequencePresetsPanel
+            prompts={prompts}
+            presets={keySequencePresets}
+            onPersist={persistSequencePresets}
           />
 
           <PromptEditor
             prompt={selectedPrompt}
+            promptTags={selectedPromptTags}
             onSave={async (draft) => {
               await savePrompt({
                 ...draft,
@@ -107,12 +170,15 @@ const App = () => {
             onDelete={deletePrompt}
           />
 
-          <BlocklyEditor
-            prompt={selectedPrompt}
+          <ExportPanel
             prompts={prompts}
-            onSave={savePrompt}
+            tagRegistry={tagRegistry}
+            bindings={elementTagBindings}
+            sequencePresets={keySequencePresets}
+            exportPresets={exportPresets}
+            onPersistPresets={persistExportPresets}
           />
-          <ExportPanel prompts={prompts} />
+
           <MergePanel prompts={prompts} />
         </div>
       </section>
