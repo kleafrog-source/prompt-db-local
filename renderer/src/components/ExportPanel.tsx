@@ -40,6 +40,38 @@ const createConfigFromFormula = (
   };
 };
 
+const buildPayload = (prompts: PromptRecord[], config: BatchPresetConfig, fileIndex: number) => {
+  const normalizedQuery = config.query.trim().toLowerCase();
+  const scopedPrompts = !normalizedQuery
+    ? prompts
+    : prompts.filter((prompt) => {
+        const haystack = [
+          prompt.name,
+          prompt.text,
+          prompt.keywords.join(' '),
+          prompt.variables.join(' '),
+        ]
+          .join('\n')
+          .toLowerCase();
+
+        return haystack.includes(normalizedQuery);
+      });
+  const ids = selectPromptIdsByMode(scopedPrompts, config.mode, config.items);
+
+  return {
+    scopedPrompts,
+    payload: createBatchExportPayload(
+      scopedPrompts,
+      ids,
+      config.mode,
+      fileIndex,
+      config.exportFormat,
+      config.variableKeys,
+      config.outputFields,
+    ),
+  };
+};
+
 export const ExportPanel = ({ prompts }: ExportPanelProps) => {
   const batchPresets = usePromptStore((state) => state.batchPresets);
   const saveBatchPreset = usePromptStore((state) => state.saveBatchPreset);
@@ -50,46 +82,19 @@ export const ExportPanel = ({ prompts }: ExportPanelProps) => {
   const [status, setStatus] = useState('Ready for batch export');
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [blocklyXml, setBlocklyXml] = useState('');
+  const [previewJson, setPreviewJson] = useState('');
+  const [previewItemCount, setPreviewItemCount] = useState(0);
+  const [previewScopeCount, setPreviewScopeCount] = useState(0);
 
   useEffect(() => {
     setFormula(formatBatchFormula(config.files, config.items, config.mode));
     setMode(config.mode);
   }, [config.files, config.items, config.mode]);
 
-  const scopedPrompts = useMemo(() => {
-    const normalizedQuery = config.query.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return prompts;
-    }
-
-    return prompts.filter((prompt) => {
-      const haystack = [
-        prompt.name,
-        prompt.text,
-        prompt.keywords.join(' '),
-        prompt.variables.join(' '),
-      ]
-        .join('\n')
-        .toLowerCase();
-
-      return haystack.includes(normalizedQuery);
-    });
-  }, [config.query, prompts]);
-
-  const previewPayload = useMemo(() => {
-    const ids = selectPromptIdsByMode(scopedPrompts, config.mode, config.items);
-
-    return createBatchExportPayload(
-      scopedPrompts,
-      ids,
-      config.mode,
-      1,
-      config.exportFormat,
-      config.variableKeys,
-      config.outputFields,
-    );
-  }, [config, scopedPrompts]);
+  const scopedPromptsCount = useMemo(
+    () => buildPayload(prompts, config, 1).scopedPrompts.length,
+    [config, prompts],
+  );
 
   const activeFormat = EXPORT_FORMATS.find((entry) => entry.key === config.exportFormat);
 
@@ -152,17 +157,25 @@ export const ExportPanel = ({ prompts }: ExportPanelProps) => {
     setStatus(preset ? `Deleted preset "${preset.presetName}"` : 'Preset deleted');
   };
 
+  const handleUpdatePreview = () => {
+    const { scopedPrompts, payload } = buildPayload(prompts, config, 1);
+    setPreviewJson(JSON.stringify(payload, null, 2));
+    setPreviewItemCount(payload.itemCount);
+    setPreviewScopeCount(scopedPrompts.length);
+    setStatus('Preview updated');
+  };
+
   const handleExportSingle = async () => {
     if (!window.electronAPI) {
       setStatus('Electron bridge is unavailable');
       return;
     }
 
-    const payload = JSON.stringify(previewPayload, null, 2);
-    const fileName = `prompt_export__${config.exportFormat}__${config.mode}__${previewPayload.itemCount}.json`;
+    const { payload } = buildPayload(prompts, config, 1);
+    const fileName = `prompt_export__${config.exportFormat}__${config.mode}__${payload.itemCount}.json`;
     const result = await window.electronAPI.saveExportFile({
       defaultFileName: sanitizeFileName(fileName),
-      content: payload,
+      content: JSON.stringify(payload, null, 2),
     });
 
     if (!result) {
@@ -180,16 +193,7 @@ export const ExportPanel = ({ prompts }: ExportPanelProps) => {
     }
 
     const files = Array.from({ length: config.files }, (_value, index) => {
-      const ids = selectPromptIdsByMode(scopedPrompts, config.mode, config.items);
-      const payload = createBatchExportPayload(
-        scopedPrompts,
-        ids,
-        config.mode,
-        index + 1,
-        config.exportFormat,
-        config.variableKeys,
-        config.outputFields,
-      );
+      const { payload } = buildPayload(prompts, config, index + 1);
 
       return {
         fileName: sanitizeFileName(
@@ -238,9 +242,8 @@ export const ExportPanel = ({ prompts }: ExportPanelProps) => {
         </div>
 
         <p className="panel-copy">
-          Build Electron-native export batches from the current database. Blockly presets control
-          the active batch formula, export format, filter scope, variable-key selection, and output
-          fields.
+          Preview updates are manual now. Change config freely, then press <code>Update preview</code>{' '}
+          when you want a fresh export snapshot.
         </p>
 
         <div className="editor-grid">
@@ -348,6 +351,9 @@ export const ExportPanel = ({ prompts }: ExportPanelProps) => {
         </div>
 
         <div className="button-row">
+          <button type="button" className="secondary-button" onClick={handleUpdatePreview}>
+            Update preview
+          </button>
           <button type="button" className="secondary-button" onClick={() => void handleExportSingle()}>
             Save preview JSON
           </button>
@@ -357,11 +363,12 @@ export const ExportPanel = ({ prompts }: ExportPanelProps) => {
         </div>
 
         <div className="export-stats">
-          <span>{scopedPrompts.length} prompts in current export scope</span>
+          <span>{scopedPromptsCount} prompts in current export scope</span>
           <span>{config.files} file(s)</span>
           <span>{config.items} JSON item(s) per file</span>
-          <span>{previewPayload.itemCount} item(s) in preview</span>
+          <span>{previewJson ? `${previewItemCount} item(s) in preview` : 'Preview not updated yet'}</span>
           <span>{activeFormat?.label ?? config.exportFormat}</span>
+          {previewJson ? <span>{previewScopeCount} prompts captured in last preview</span> : null}
         </div>
 
         <p className="panel-copy compact-copy">
@@ -370,7 +377,11 @@ export const ExportPanel = ({ prompts }: ExportPanelProps) => {
 
         <label className="field field-full">
           <span>Preview payload</span>
-          <textarea value={JSON.stringify(previewPayload, null, 2)} readOnly rows={16} />
+          <textarea
+            value={previewJson || 'Preview is not generated yet. Click "Update preview".'}
+            readOnly
+            rows={16}
+          />
         </label>
       </section>
     </>

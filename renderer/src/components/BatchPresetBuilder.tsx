@@ -21,6 +21,8 @@ type BatchPresetBuilderProps = {
   onDeletePreset: (presetId: string) => Promise<void>;
 };
 
+const serializeConfig = (value: BatchPresetConfig) => JSON.stringify(value);
+
 export const BatchPresetBuilder = ({
   prompts,
   config,
@@ -35,9 +37,92 @@ export const BatchPresetBuilder = ({
   const blocklyHostRef = useRef<HTMLDivElement | null>(null);
   const blocklyStageRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
   const isApplyingXmlRef = useRef(false);
+  const onConfigChangeRef = useRef(onConfigChange);
+  const configRef = useRef(config);
+  const promptsRef = useRef(prompts);
+  const lastSyncedConfigRef = useRef(serializeConfig(config));
+  const lastSyncedXmlRef = useRef(workspaceXml);
   const [jsonSnapshot, setJsonSnapshot] = useState(JSON.stringify(config, null, 2));
   const [status, setStatus] = useState('Preset workspace ready');
+
+  useEffect(() => {
+    onConfigChangeRef.current = onConfigChange;
+  }, [onConfigChange]);
+
+  useEffect(() => {
+    configRef.current = config;
+    setJsonSnapshot(JSON.stringify(config, null, 2));
+  }, [config]);
+
+  useEffect(() => {
+    promptsRef.current = prompts;
+  }, [prompts]);
+
+  const loadXmlIntoWorkspace = (xmlText: string, nextConfig: BatchPresetConfig, nextStatus: string) => {
+    const workspace = workspaceRef.current;
+
+    if (!workspace) {
+      return;
+    }
+
+    try {
+      isApplyingXmlRef.current = true;
+      workspace.clear();
+      Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(xmlText), workspace);
+      Blockly.svgResize(workspace);
+      setJsonSnapshot(JSON.stringify(nextConfig, null, 2));
+      lastSyncedConfigRef.current = serializeConfig(nextConfig);
+      lastSyncedXmlRef.current = xmlText;
+      setStatus(nextStatus);
+    } finally {
+      isApplyingXmlRef.current = false;
+    }
+  };
+
+  const syncFromWorkspace = () => {
+    const workspace = workspaceRef.current;
+
+    if (!workspace || isApplyingXmlRef.current) {
+      return;
+    }
+
+    const nextConfig = workspaceToBatchPresetConfig(workspace, configRef.current);
+    const nextXml = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
+    const serializedConfig = serializeConfig(nextConfig);
+
+    setJsonSnapshot(JSON.stringify(nextConfig, null, 2));
+
+    if (
+      serializedConfig === lastSyncedConfigRef.current &&
+      nextXml === lastSyncedXmlRef.current
+    ) {
+      return;
+    }
+
+    lastSyncedConfigRef.current = serializedConfig;
+    lastSyncedXmlRef.current = nextXml;
+    onConfigChangeRef.current(nextConfig, nextXml);
+    setStatus('Batch preset synchronized');
+  };
+
+  const refreshToolboxFromDatabase = () => {
+    const workspace = workspaceRef.current;
+
+    if (!workspace) {
+      return;
+    }
+
+    workspace.updateToolbox(createBatchBlocklyToolbox(promptsRef.current));
+    Blockly.svgResize(workspace);
+    setStatus('Blockly database options refreshed');
+  };
+
+  const applyCurrentConfigToBlockly = () => {
+    const xmlText = workspaceXml || batchPresetToWorkspaceXml(configRef.current);
+    loadXmlIntoWorkspace(xmlText, configRef.current, 'Applied current config to Blockly');
+  };
 
   useLayoutEffect(() => {
     registerBatchBlocklyBlocks();
@@ -50,7 +135,6 @@ export const BatchPresetBuilder = ({
     }
 
     let disposed = false;
-    let cleanup: (() => void) | undefined;
 
     const mount = () => {
       if (disposed || workspaceRef.current) {
@@ -65,7 +149,7 @@ export const BatchPresetBuilder = ({
       }
 
       const workspace = Blockly.inject(host, {
-        toolbox: createBatchBlocklyToolbox(prompts),
+        toolbox: createBatchBlocklyToolbox(promptsRef.current),
         trashcan: true,
         renderer: 'geras',
         move: {
@@ -84,17 +168,25 @@ export const BatchPresetBuilder = ({
 
       workspaceRef.current = workspace;
 
-      const sync = () => {
+      const handleWorkspaceChange = (event: Blockly.Events.Abstract) => {
         if (isApplyingXmlRef.current) {
           return;
         }
 
-        const nextConfig = workspaceToBatchPresetConfig(workspace, config);
-        const xmlText = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
+        if ('isUiEvent' in event && event.isUiEvent) {
+          return;
+        }
 
-        setJsonSnapshot(JSON.stringify(nextConfig, null, 2));
-        onConfigChange(nextConfig, xmlText);
-        setStatus('Batch preset synchronized');
+        if (
+          event.type === Blockly.Events.FINISHED_LOADING ||
+          event.type === Blockly.Events.TOOLBOX_ITEM_SELECT ||
+          event.type === Blockly.Events.VIEWPORT_CHANGE ||
+          event.type === Blockly.Events.CLICK
+        ) {
+          return;
+        }
+
+        syncFromWorkspace();
       };
 
       const resize = () => {
@@ -111,14 +203,17 @@ export const BatchPresetBuilder = ({
 
       resizeObserver.observe(stage);
       resizeObserver.observe(host);
-      workspace.addChangeListener(sync);
+      workspace.addChangeListener(handleWorkspaceChange);
       window.addEventListener('resize', resize);
       resize();
 
-      cleanup = () => {
+      const initialXml = workspaceXml || batchPresetToWorkspaceXml(configRef.current);
+      loadXmlIntoWorkspace(initialXml, configRef.current, 'Preset workspace ready');
+
+      cleanupRef.current = () => {
         resizeObserver.disconnect();
         window.removeEventListener('resize', resize);
-        workspace.removeChangeListener(sync);
+        workspace.removeChangeListener(handleWorkspaceChange);
         workspace.dispose();
         workspaceRef.current = null;
       };
@@ -128,70 +223,40 @@ export const BatchPresetBuilder = ({
 
     return () => {
       disposed = true;
-      cleanup?.();
+      cleanupRef.current?.();
+      cleanupRef.current = null;
     };
-  }, [config, onConfigChange, prompts]);
+  }, []);
 
   useEffect(() => {
-    const workspace = workspaceRef.current;
-
-    if (!workspace) {
+    if (!workspaceRef.current || (!selectedPresetId && !workspaceXml)) {
       return;
     }
 
-    workspace.updateToolbox(createBatchBlocklyToolbox(prompts));
-    Blockly.svgResize(workspace);
-  }, [prompts]);
-
-  useEffect(() => {
-    const workspace = workspaceRef.current;
-
-    if (!workspace) {
-      setJsonSnapshot(JSON.stringify(config, null, 2));
-      return;
-    }
-
-    const xmlText = workspaceXml || batchPresetToWorkspaceXml(config);
-
-    try {
-      isApplyingXmlRef.current = true;
-      workspace.clear();
-      Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(xmlText), workspace);
-      Blockly.svgResize(workspace);
-      setJsonSnapshot(JSON.stringify(config, null, 2));
-      setStatus(config.presetName ? `Loaded preset graph for "${config.presetName}"` : 'Preset graph loaded');
-    } finally {
-      isApplyingXmlRef.current = false;
-    }
-  }, [config, workspaceXml]);
+    const nextConfig = configRef.current;
+    const nextXml = workspaceXml || batchPresetToWorkspaceXml(nextConfig);
+    loadXmlIntoWorkspace(
+      nextXml,
+      nextConfig,
+      nextConfig.presetName ? `Loaded preset graph for "${nextConfig.presetName}"` : 'Preset graph loaded',
+    );
+  }, [selectedPresetId, workspaceXml]);
 
   const handleLoadJson = () => {
-    const workspace = workspaceRef.current;
-
-    if (!workspace) {
-      return;
-    }
-
     try {
       const parsed = JSON.parse(jsonSnapshot) as BatchPresetConfig;
       const normalized: BatchPresetConfig = {
-        ...config,
+        ...configRef.current,
         ...parsed,
         variableKeys: Array.isArray(parsed.variableKeys) ? parsed.variableKeys : [],
         outputFields: Array.isArray(parsed.outputFields) ? parsed.outputFields : [],
       };
       const xmlText = batchPresetToWorkspaceXml(normalized);
 
-      isApplyingXmlRef.current = true;
-      workspace.clear();
-      Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(xmlText), workspace);
-      Blockly.svgResize(workspace);
-      onConfigChange(normalized, xmlText);
-      setStatus('Loaded JSON config into Batch Blockly');
+      loadXmlIntoWorkspace(xmlText, normalized, 'Loaded JSON config into Batch Blockly');
+      onConfigChangeRef.current(normalized, xmlText);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Failed to parse preset JSON');
-    } finally {
-      isApplyingXmlRef.current = false;
     }
   };
 
@@ -204,7 +269,7 @@ export const BatchPresetBuilder = ({
 
     const xmlText = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
     await onSavePreset(xmlText);
-    setStatus(`Saved preset "${config.presetName}"`);
+    setStatus(`Saved preset "${configRef.current.presetName}"`);
   };
 
   return (
@@ -218,8 +283,8 @@ export const BatchPresetBuilder = ({
       </div>
 
       <p className="panel-copy">
-        Build export presets visually. The workspace stays synchronized with the current batch
-        settings, variable keys, and output fields discovered in the local prompt database.
+        Batch Blockly no longer auto-refreshes from every UI event. Use manual actions when you
+        want to reload DB-driven options or apply the current form configuration into the canvas.
       </p>
 
       <div className="editor-grid">
@@ -261,6 +326,16 @@ export const BatchPresetBuilder = ({
         <div className="button-row">
           <button type="button" className="secondary-button" onClick={handleLoadJson}>
             Load JSON into Batch Blockly
+          </button>
+          <button type="button" className="secondary-button" onClick={applyCurrentConfigToBlockly}>
+            Apply form to Blockly
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={refreshToolboxFromDatabase}
+          >
+            Refresh DB options
           </button>
           <button type="button" className="secondary-button" onClick={() => void handleSavePreset()}>
             Save preset
