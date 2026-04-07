@@ -31,10 +31,41 @@ const DEFAULT_HTTP_PORT = 3210;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const normalizeText = (value: string) => value.replace(/\s+/g, ' ').trim();
+const isServiceItemsArray = (value: unknown) =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every(
+    (entry) =>
+      isRecord(entry) &&
+      typeof entry.id === 'string' &&
+      Array.isArray(entry.sourceElementIds) &&
+      entry.sourceElementIds.every((item) => typeof item === 'string'),
+  );
+
+const sanitizePromptJson = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizePromptJson(entry));
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key, entry]) => !key.startsWith('__') && !(key === 'items' && isServiceItemsArray(entry)))
+      .map(([key, entry]) => [key, sanitizePromptJson(entry)]),
+  );
+};
+
+const sanitizePromptObject = (value: Record<string, unknown>) =>
+  sanitizePromptJson(value) as Record<string, unknown>;
 
 const parsePattern = (pattern?: string) => {
-  const match = String(pattern || '').trim().toLowerCase().match(/(\d+)\s*[xх*]\s*(\d+)(?:\s+([a-z_]+))?/i);
+  const match = String(pattern || '')
+    .trim()
+    .toLowerCase()
+    .match(/(\d+)\s*[xС…*]\s*(\d+)(?:\s+([a-z_]+))?/i);
 
   return {
     files: Math.max(1, Number(match?.[1]) || 1),
@@ -54,7 +85,10 @@ const collectKeyNames = (value: unknown, result = new Set<string>()) => {
   }
 
   Object.entries(value).forEach(([key, entry]) => {
-    result.add(key);
+    if (!key.startsWith('__')) {
+      result.add(key);
+    }
+
     collectKeyNames(entry, result);
   });
 
@@ -76,41 +110,27 @@ const getValueByPath = (value: unknown, path: string): unknown => {
   return cursor;
 };
 
-const collectLeafText = (value: unknown, result: string[] = []) => {
-  if (typeof value === 'string') {
-    const normalized = normalizeText(value);
+const setValueByPath = (target: Record<string, unknown>, path: string, value: unknown) => {
+  const segments = path.split('.').filter(Boolean);
 
-    if (normalized) {
-      result.push(normalized);
+  if (segments.length === 0) {
+    return;
+  }
+
+  let cursor = target;
+
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const key = segments[index];
+    const existing = cursor[key];
+
+    if (!isRecord(existing)) {
+      cursor[key] = {};
     }
 
-    return result;
+    cursor = cursor[key] as Record<string, unknown>;
   }
 
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    result.push(String(value));
-    return result;
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach((entry) => collectLeafText(entry, result));
-    return result;
-  }
-
-  if (isRecord(value)) {
-    Object.values(value).forEach((entry) => collectLeafText(entry, result));
-  }
-
-  return result;
-};
-
-const buildPromptTextFromValue = (value: unknown) => {
-  const text = collectLeafText(value)
-    .filter(Boolean)
-    .join('\n')
-    .trim();
-
-  return text || JSON.stringify(value, null, 2);
+  cursor[segments[segments.length - 1]] = sanitizePromptJson(value);
 };
 
 const createTagBindingsMap = (bindings: Array<{ elementId: string; tags: string[] }>) =>
@@ -157,19 +177,96 @@ const chooseIndexed = <T>(items: T[], index: number, mode: string) => {
     return items[index % items.length] ?? null;
   }
 
+  if (mode === 'weighted') {
+    return items[Math.min(items.length - 1, Math.floor(Math.random() * Math.random() * items.length))] ?? null;
+  }
+
   return items[Math.floor(Math.random() * items.length)] ?? null;
 };
 
-const buildSequencePromptText = (
-  prompt: PromptSnapshotRecord,
-  sequencePaths: string[],
-) => {
-  const chunks = sequencePaths
-    .map((path) => getValueByPath(prompt.json_data, path))
-    .filter((value) => value !== undefined)
-    .map((value) => buildPromptTextFromValue(value));
+const getTopLevelFragments = (prompt: PromptSnapshotRecord) => {
+  const json = sanitizePromptObject(prompt.json_data);
 
-  return chunks.join('\n\n').trim();
+  return Object.entries(json).map(([key, value]) => ({
+    path: key,
+    value,
+    sourceId: prompt.id,
+  }));
+};
+
+const buildRandomMixObject = (
+  prompts: PromptSnapshotRecord[],
+  itemIndex: number,
+  mode: string,
+  maxBlocksPerElement = 4,
+) => {
+  const allFragments = prompts.flatMap(getTopLevelFragments);
+  const output: Record<string, unknown> = {};
+  const used = new Set<string>();
+
+  for (let index = 0; index < Math.max(1, maxBlocksPerElement); index += 1) {
+    const fragment = chooseIndexed(allFragments, itemIndex + index, mode);
+
+    if (!fragment || used.has(`${fragment.sourceId}:${fragment.path}`)) {
+      continue;
+    }
+
+    used.add(`${fragment.sourceId}:${fragment.path}`);
+    setValueByPath(output, fragment.path, fragment.value);
+  }
+
+  return output;
+};
+
+const buildSequenceBasedObject = (
+  prompts: PromptSnapshotRecord[],
+  selectedPresets: Array<{
+    sequences: Array<{ id: string; pathChain: string[] }>;
+    generationRules?: { mode?: 'random' | 'weighted' | 'sequential'; maxBlocks?: number };
+  }>,
+  itemIndex: number,
+  maxBlocksPerElement = 4,
+) => {
+  const output: Record<string, unknown> = {};
+  let blockCount = 0;
+  let firstSequenceId: string | undefined;
+
+  for (const preset of selectedPresets) {
+    const mode = preset.generationRules?.mode ?? 'random';
+    const limit = preset.generationRules?.maxBlocks ?? preset.sequences.length;
+
+    for (let sequenceIndex = 0; sequenceIndex < preset.sequences.length; sequenceIndex += 1) {
+      if (blockCount >= maxBlocksPerElement || blockCount >= limit) {
+        break;
+      }
+
+      const sequence = preset.sequences[sequenceIndex];
+      const parentPath = sequence.pathChain[0];
+      const matches = prompts.filter(
+        (prompt) => getValueByPath(prompt.json_data, parentPath) !== undefined,
+      );
+      const selected = chooseIndexed(matches, itemIndex + sequenceIndex, mode);
+
+      if (!selected) {
+        continue;
+      }
+
+      const value = getValueByPath(selected.json_data, parentPath);
+
+      if (value === undefined) {
+        continue;
+      }
+
+      setValueByPath(output, parentPath, value);
+      firstSequenceId ??= sequence.id;
+      blockCount += 1;
+    }
+  }
+
+  return {
+    content: output,
+    sequenceId: firstSequenceId,
+  };
 };
 
 const buildBatchPrompts = async (config: BatchConfig): Promise<BatchResult> => {
@@ -185,8 +282,13 @@ const buildBatchPrompts = async (config: BatchConfig): Promise<BatchResult> => {
     promptSnapshot,
     bindingsMap,
     {
-      tagsInclude: config.tagsInclude ?? exportPreset?.filters?.includeTags ?? [],
-      tagsExclude: config.tagsExclude ?? exportPreset?.filters?.excludeTags ?? [],
+      tagsInclude:
+        config.tagsInclude && config.tagsInclude.length > 0
+          ? config.tagsInclude
+          : exportPreset?.filters?.includeTags ?? [],
+      tagsExclude: Array.from(
+        new Set([...(exportPreset?.filters?.excludeTags ?? []), ...(config.tagsExclude ?? [])]),
+      ),
     },
     {
       includeKeys,
@@ -202,68 +304,72 @@ const buildBatchPrompts = async (config: BatchConfig): Promise<BatchResult> => {
       : metaState.keySequencePresets;
 
   const prompts: GenerateBatchPrompt[] = [];
-  const total = parsedPattern.files * parsedPattern.items;
-  const maxMixItems = Math.max(2, exportPreset?.slicing?.maxBlocksPerElement ?? 4);
+  const maxMixItems = Math.max(1, exportPreset?.slicing?.maxBlocksPerElement ?? 4);
 
-  for (let index = 0; index < total; index += 1) {
-    if (compositionMode === 'random-mix') {
-      const picked = Array.from({ length: maxMixItems }, (_unused, mixIndex) =>
-        chooseIndexed(filtered, index + mixIndex, parsedPattern.mode),
-      ).filter((entry): entry is PromptSnapshotRecord => Boolean(entry));
-      const text = picked.map((entry) => entry.text).join('\n\n').trim();
-
-      prompts.push({
-        id: `mix_${index + 1}_${crypto.randomUUID()}`,
-        text,
-        presetId: exportPreset?.id ?? config.presetId,
-      });
-      continue;
+  /** Matches renderer `exportComposer.generateExport`: `files` outputs, each with `items` fragments. */
+  for (let fileIndex = 0; fileIndex < parsedPattern.files; fileIndex += 1) {
+    if (filtered.length === 0) {
+      break;
     }
 
-    if (compositionMode === 'sequence-based' && sequencePresets.length > 0) {
-      const selectedSequencePreset = chooseIndexed(sequencePresets, index, parsedPattern.mode);
+    const rawItems: Record<string, unknown>[] = [];
+    let fileSequenceId: string | undefined;
 
-      if (selectedSequencePreset) {
-        const chunks = selectedSequencePreset.sequences
-          .map((sequence) => {
-            const parentPath = sequence.pathChain[0];
-            const prompt = filtered.find((entry) => getValueByPath(entry.json_data, parentPath) !== undefined);
+    for (let itemIndex = 0; itemIndex < parsedPattern.items; itemIndex += 1) {
+      const globalIndex = fileIndex * parsedPattern.items + itemIndex;
 
-            if (!prompt) {
-              return null;
-            }
-
-            return {
-              prompt,
-              sequenceId: sequence.id,
-              text: buildSequencePromptText(prompt, sequence.pathChain),
-            };
-          })
-          .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-          .slice(0, maxMixItems);
-
-        prompts.push({
-          id: `sequence_${index + 1}_${crypto.randomUUID()}`,
-          text: chunks.map((chunk) => chunk.text).join('\n\n').trim(),
-          presetId: exportPreset?.id ?? config.presetId,
-          sequenceId: chunks[0]?.sequenceId,
-        });
+      if (compositionMode === 'random-mix') {
+        const content = buildRandomMixObject(filtered, globalIndex, parsedPattern.mode, maxMixItems);
+        rawItems.push(Object.keys(content).length === 0 ? {} : content);
         continue;
       }
+
+      if (compositionMode === 'sequence-based' && sequencePresets.length > 0) {
+        const { content, sequenceId } = buildSequenceBasedObject(
+          filtered,
+          sequencePresets,
+          globalIndex,
+          maxMixItems,
+        );
+
+        if (sequenceId) {
+          fileSequenceId ??= sequenceId;
+        }
+
+        rawItems.push(content);
+        continue;
+      }
+
+      const prompt = chooseIndexed(filtered, globalIndex, parsedPattern.mode);
+
+      if (!prompt) {
+        rawItems.push({});
+        continue;
+      }
+
+      rawItems.push(prompt.json_data as Record<string, unknown>);
     }
 
-    const prompt = chooseIndexed(filtered, index, parsedPattern.mode);
+    const sanitizedItems = rawItems.map((item) => sanitizePromptObject(item));
+    const combined =
+      sanitizedItems.length === 1 ? sanitizedItems[0] : sanitizedItems;
 
-    prompts.push({
-      id: prompt?.id ?? `prompt_${index + 1}_${crypto.randomUUID()}`,
-      text: prompt?.text ?? '',
+    const promptEntry: GenerateBatchPrompt = {
+      id: `file_${fileIndex + 1}_${crypto.randomUUID()}`,
+      text: JSON.stringify(sanitizePromptJson(combined), null, 2),
       presetId: exportPreset?.id ?? config.presetId,
-    });
+    };
+
+    if (fileSequenceId) {
+      promptEntry.sequenceId = fileSequenceId;
+    }
+
+    prompts.push(promptEntry);
   }
 
   return {
     batchId: crypto.randomUUID(),
-    prompts: prompts.filter((prompt) => prompt.text.trim().length > 0),
+    prompts,
   };
 };
 

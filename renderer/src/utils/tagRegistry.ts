@@ -88,6 +88,24 @@ export const removeTag = (registry: TagRegistry, tagId: string): TagRegistry => 
   tags: registry.tags.filter((tag) => tag.id !== tagId),
 });
 
+export const removeTagsFromBindings = (
+  bindings: ElementTagBinding[],
+  tagIds: string[],
+): ElementTagBinding[] => {
+  if (tagIds.length === 0) {
+    return bindings;
+  }
+
+  const removed = new Set(tagIds);
+
+  return bindings
+    .map((binding) => ({
+      ...binding,
+      tags: binding.tags.filter((tagId) => !removed.has(tagId)),
+    }))
+    .filter((binding) => binding.tags.length > 0);
+};
+
 export const getTagsForElement = (element: DBElement, registry: TagRegistry): string[] => {
   const keys = collectKeys(element.raw);
   const values = flattenStringValues(element.raw).join('\n');

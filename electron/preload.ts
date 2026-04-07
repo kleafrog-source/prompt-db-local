@@ -80,6 +80,13 @@ type PromptSnapshotRecord = {
   source?: string;
 };
 
+type MMSSJobResult = {
+  ok: boolean;
+  output: string;
+  error?: string;
+  data?: any;
+};
+
 contextBridge.exposeInMainWorld('electronAPI', {
   openJsonFile: async () =>
     ipcRenderer.invoke('dialogs:open-json') as Promise<
@@ -149,4 +156,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('ws:status', listener);
     };
   },
+  mmssRunTask: async (payload: { script: string; args: string[] }) =>
+    ipcRenderer.invoke('mmss:run-task', payload) as Promise<MMSSJobResult>,
 });

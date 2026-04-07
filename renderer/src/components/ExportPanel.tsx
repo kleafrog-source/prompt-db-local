@@ -59,6 +59,8 @@ const splitCsv = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
+const joinCsv = (value?: string[]) => (value ?? []).join(', ');
+
 export const ExportPanel = ({
   prompts,
   tagRegistry,
@@ -71,15 +73,28 @@ export const ExportPanel = ({
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [previewJson, setPreviewJson] = useState('');
   const [status, setStatus] = useState('Export presets ready');
+  const [includeTagsInput, setIncludeTagsInput] = useState('');
+  const [excludeTagsInput, setExcludeTagsInput] = useState('');
+  const [includeKeysInput, setIncludeKeysInput] = useState('');
+  const [excludeKeysInput, setExcludeKeysInput] = useState('');
 
   const elements = useMemo(() => toElements(prompts, bindings), [prompts, bindings]);
   const patternInfo = parseCompositionPattern(draft.composition?.pattern);
+
+  const syncDraftInputs = (nextDraft: ExportPreset) => {
+    setIncludeTagsInput(joinCsv(nextDraft.filters?.includeTags));
+    setExcludeTagsInput(joinCsv(nextDraft.filters?.excludeTags));
+    setIncludeKeysInput(joinCsv(nextDraft.filters?.includeKeys));
+    setExcludeKeysInput(joinCsv(nextDraft.filters?.excludeKeys));
+  };
 
   const handleSelectPreset = (presetId: string) => {
     setSelectedPresetId(presetId);
 
     if (!presetId) {
-      setDraft(createDefaultPreset());
+      const nextDraft = createDefaultPreset();
+      setDraft(nextDraft);
+      syncDraftInputs(nextDraft);
       setStatus('Switched to unsaved export preset');
       return;
     }
@@ -91,6 +106,7 @@ export const ExportPanel = ({
     }
 
     setDraft(preset);
+    syncDraftInputs(preset);
     setStatus(`Loaded export preset "${preset.label}"`);
   };
 
@@ -106,6 +122,7 @@ export const ExportPanel = ({
       ),
     );
     setDraft(nextPreset);
+    syncDraftInputs(nextPreset);
     setSelectedPresetId(nextPreset.id);
     setStatus(`Saved export preset "${nextPreset.label}"`);
   };
@@ -118,7 +135,9 @@ export const ExportPanel = ({
     const preset = exportPresets.find((entry) => entry.id === selectedPresetId);
     await onPersistPresets(exportPresets.filter((entry) => entry.id !== selectedPresetId));
     setSelectedPresetId('');
-    setDraft(createDefaultPreset());
+    const nextDraft = createDefaultPreset();
+    setDraft(nextDraft);
+    syncDraftInputs(nextDraft);
     setStatus(preset ? `Deleted export preset "${preset.label}"` : 'Deleted export preset');
   };
 
@@ -249,15 +268,19 @@ export const ExportPanel = ({
         <label className="field">
           <span>Include tags</span>
           <input
-            value={(draft.filters?.includeTags ?? []).join(', ')}
+            value={includeTagsInput}
             onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                filters: {
-                  ...current.filters,
-                  includeTags: splitCsv(event.target.value),
-                },
-              }))
+              {
+                const nextValue = event.target.value;
+                setIncludeTagsInput(nextValue);
+                setDraft((current) => ({
+                  ...current,
+                  filters: {
+                    ...current.filters,
+                    includeTags: splitCsv(nextValue),
+                  },
+                }));
+              }
             }
             placeholder={tagRegistry.tags.slice(0, 4).map((tag) => tag.id).join(', ')}
           />
@@ -266,15 +289,19 @@ export const ExportPanel = ({
         <label className="field">
           <span>Exclude tags</span>
           <input
-            value={(draft.filters?.excludeTags ?? []).join(', ')}
+            value={excludeTagsInput}
             onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                filters: {
-                  ...current.filters,
-                  excludeTags: splitCsv(event.target.value),
-                },
-              }))
+              {
+                const nextValue = event.target.value;
+                setExcludeTagsInput(nextValue);
+                setDraft((current) => ({
+                  ...current,
+                  filters: {
+                    ...current.filters,
+                    excludeTags: splitCsv(nextValue),
+                  },
+                }));
+              }
             }
           />
         </label>
@@ -282,15 +309,19 @@ export const ExportPanel = ({
         <label className="field">
           <span>Include keys</span>
           <input
-            value={(draft.filters?.includeKeys ?? []).join(', ')}
+            value={includeKeysInput}
             onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                filters: {
-                  ...current.filters,
-                  includeKeys: splitCsv(event.target.value),
-                },
-              }))
+              {
+                const nextValue = event.target.value;
+                setIncludeKeysInput(nextValue);
+                setDraft((current) => ({
+                  ...current,
+                  filters: {
+                    ...current.filters,
+                    includeKeys: splitCsv(nextValue),
+                  },
+                }));
+              }
             }
           />
         </label>
@@ -298,15 +329,19 @@ export const ExportPanel = ({
         <label className="field">
           <span>Exclude keys</span>
           <input
-            value={(draft.filters?.excludeKeys ?? []).join(', ')}
+            value={excludeKeysInput}
             onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                filters: {
-                  ...current.filters,
-                  excludeKeys: splitCsv(event.target.value),
-                },
-              }))
+              {
+                const nextValue = event.target.value;
+                setExcludeKeysInput(nextValue);
+                setDraft((current) => ({
+                  ...current,
+                  filters: {
+                    ...current.filters,
+                    excludeKeys: splitCsv(nextValue),
+                  },
+                }));
+              }
             }
           />
         </label>

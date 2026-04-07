@@ -339,7 +339,7 @@ code {
 
 .registry-item {
   display: grid;
-  grid-template-columns: auto minmax(140px, 1fr) 120px minmax(160px, auto) auto;
+  grid-template-columns: auto auto minmax(140px, 1fr) 120px minmax(160px, auto) auto;
   gap: 12px;
   align-items: center;
   padding: 14px 16px;

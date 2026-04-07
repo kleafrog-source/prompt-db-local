@@ -95,7 +95,8 @@ describe('exportComposer', () => {
     const files = await generateExport(elements, preset, tagRegistry, sequencePresets);
 
     expect(files).toHaveLength(1);
-    expect(files[0]?.content.items).toHaveLength(2);
+    expect(Array.isArray(files[0]?.content)).toBe(true);
+    expect((files[0]?.content as Record<string, unknown>[])).toHaveLength(2);
   });
 
   it('generates sequence-based export files', async () => {
@@ -117,9 +118,10 @@ describe('exportComposer', () => {
     };
 
     const files = await generateExport(elements, preset, tagRegistry, sequencePresets);
-    const item = files[0]?.content.items[0];
+    const item = Array.isArray(files[0]?.content)
+      ? files[0]?.content[0]
+      : files[0]?.content;
 
-    expect(item.content).toHaveProperty('micro_dynamic_shaping_v4.kick_transient_geometry'.split('.')[0]);
-    expect(item.sourceElementIds.length).toBeGreaterThan(0);
+    expect(item).toHaveProperty('micro_dynamic_shaping_v4.kick_transient_geometry'.split('.')[0]);
   });
 });

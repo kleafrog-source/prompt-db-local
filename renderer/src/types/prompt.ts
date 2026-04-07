@@ -1,3 +1,13 @@
+export type PromptSourceItem = {
+  id: string;
+  sourceElementIds: string[];
+};
+
+export type PromptServiceMeta = {
+  fragmentIndex?: number;
+  items?: PromptSourceItem[];
+};
+
 export type PromptRecord = {
   id: string;
   name: string;
@@ -9,9 +19,14 @@ export type PromptRecord = {
   created_at: string;
   updated_at: string;
   source?: string;
+  serviceMeta?: PromptServiceMeta;
 };
 
-export type PromptDraft = Omit<PromptRecord, 'id' | 'created_at' | 'updated_at' | 'fingerprint'> & {
+export type PromptDraft = Omit<
+  PromptRecord,
+  'id' | 'created_at' | 'updated_at' | 'fingerprint' | 'text'
+> & {
+  text?: string;
   id?: string;
   fingerprint?: string;
   created_at?: string;

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ImportPanel } from '@/components/ImportPanel';
-import { MergePanel } from '@/components/MergePanel';
+import { MMSSRuntimePanel } from '@/components/MMSSRuntimePanel';
 import { PromptEditor } from '@/components/PromptEditor';
 import { PromptList } from '@/components/PromptList';
 import { SequencePresetsPanel } from '@/components/SequencePresetsPanel';
@@ -83,6 +83,12 @@ const App = () => {
     setWsStatus(status);
   };
 
+  const handleImportGenerated = async (blocks: any[], intent: string) => {
+    // Treat the generated block set as a single import source
+    const rawJson = JSON.stringify(blocks);
+    await importRawJson(rawJson, `mmss-v3:${intent}`);
+  };
+
   const persistRegistryAndBindings = async (
     nextTagRegistry: TagRegistry,
     nextBindings: ElementTagBinding[],
@@ -114,12 +120,12 @@ const App = () => {
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">Local Prompt Organism</p>
-          <h1>Electron prompt laboratory with tags, key sequences, and generated exports</h1>
+        <p className="eyebrow">Local Prompt Organism</p>
+          <h1>Electron prompt laboratory for clean JSON blocks, tags, and batch generation</h1>
         </div>
         <p className="hero-copy">
-          A local-first workspace for parsing messy JSON, detecting structural patterns, curating
-          tags, and generating new exports from imported rule blocks over Chrome extension sync.
+          A local-first workspace for importing strict JSON fragments, curating tags and sequences,
+          and generating clean prompt batches for producer.ai without leaking technical metadata.
         </p>
       </section>
 
@@ -162,12 +168,13 @@ const App = () => {
             prompt={selectedPrompt}
             promptTags={selectedPromptTags}
             onSave={async (draft) => {
-              await savePrompt({
-                ...draft,
-                json_data: draft.json_data,
-              });
+              await savePrompt(draft);
             }}
             onDelete={deletePrompt}
+          />
+
+          <MMSSRuntimePanel 
+            onImportGenerated={handleImportGenerated}
           />
 
           <ExportPanel
@@ -178,8 +185,6 @@ const App = () => {
             exportPresets={exportPresets}
             onPersistPresets={persistExportPresets}
           />
-
-          <MergePanel prompts={prompts} />
         </div>
       </section>
     </main>

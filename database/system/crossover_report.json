@@ -1,0 +1,85 @@
+{
+  "generated_count": 10,
+  "crossovers": [
+    {
+      "id": "cross_e1b0",
+      "parents": [
+        "meta_221",
+        "meta_148"
+      ],
+      "strategy": "params_union"
+    },
+    {
+      "id": "cross_bf29",
+      "parents": [
+        "83",
+        "meta_124"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_5830",
+      "parents": [
+        "meta_272",
+        "meta_173"
+      ],
+      "strategy": "params_union"
+    },
+    {
+      "id": "cross_dadd",
+      "parents": [
+        "meta_145",
+        "109"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_2de3",
+      "parents": [
+        "71",
+        "104"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_5356",
+      "parents": [
+        "7",
+        "meta_291"
+      ],
+      "strategy": "params_union"
+    },
+    {
+      "id": "cross_26f8",
+      "parents": [
+        "90",
+        "meta_219"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_ffa",
+      "parents": [
+        "meta_124",
+        "43"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_8737",
+      "parents": [
+        "105",
+        "meta_269"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_13c0",
+      "parents": [
+        "75",
+        "meta_192"
+      ],
+      "strategy": "shared_domain_merge"
+    }
+  ]
+}

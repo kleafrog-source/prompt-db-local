@@ -5,6 +5,7 @@ import {
   applyTagsToElements,
   createTag,
   removeTag,
+  removeTagsFromBindings,
   upsertTag,
 } from '@/utils/tagRegistry';
 import {
@@ -40,6 +41,7 @@ export const TagKeyExplorer = ({
   const [scannedValues, setScannedValues] = useState<FrequencyEntry[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Record<string, boolean>>({});
   const [selectedValues, setSelectedValues] = useState<Record<string, boolean>>({});
+  const [selectedRegistryTags, setSelectedRegistryTags] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState('Registry ready');
   const [manualLabel, setManualLabel] = useState('');
 
@@ -125,6 +127,29 @@ export const TagKeyExplorer = ({
     setStatus(`Applied tags to ${nextBindings.length} DB elements`);
   };
 
+  const handleDeleteSelectedTags = async () => {
+    const ids = Object.entries(selectedRegistryTags)
+      .filter(([, selected]) => selected)
+      .map(([tagId]) => tagId);
+
+    if (ids.length === 0) {
+      setStatus('Select at least one registry tag before deleting');
+      return;
+    }
+
+    if (!window.confirm(`Delete ${ids.length} selected tag(s) from the registry?`)) {
+      return;
+    }
+
+    const nextRegistry = ids.reduce((registry, tagId) => removeTag(registry, tagId), localRegistry);
+    const nextBindings = removeTagsFromBindings(bindings, ids);
+
+    setLocalRegistry(nextRegistry);
+    setSelectedRegistryTags({});
+    await onPersist(nextRegistry, nextBindings);
+    setStatus(`Deleted ${ids.length} selected tag(s) and updated bindings`);
+  };
+
   const rows = activeTab === 'keys' ? scannedKeys : scannedValues;
   const selection = activeTab === 'keys' ? selectedKeys : selectedValues;
 
@@ -152,6 +177,9 @@ export const TagKeyExplorer = ({
         </button>
         <button type="button" className="secondary-button" onClick={addSelectedToRegistry}>
           Add selected to registry
+        </button>
+        <button type="button" className="secondary-button" onClick={() => void handleDeleteSelectedTags()}>
+          Delete selected keys/tags
         </button>
         <button type="button" className="secondary-button" onClick={() => void handlePersistRegistry()}>
           Save registry
@@ -220,6 +248,16 @@ export const TagKeyExplorer = ({
         {localRegistry.tags.map((tag) => (
           <article key={tag.id} className="registry-item">
             <input
+              type="checkbox"
+              checked={Boolean(selectedRegistryTags[tag.id])}
+              onChange={() =>
+                setSelectedRegistryTags((current) => ({
+                  ...current,
+                  [tag.id]: !current[tag.id],
+                }))
+              }
+            />
+            <input
               type="color"
               value={tag.color.startsWith('#') ? tag.color : '#6aa86f'}
               onChange={(event) =>
@@ -261,7 +299,13 @@ export const TagKeyExplorer = ({
             <button
               type="button"
               className="secondary-button"
-              onClick={() => setLocalRegistry((current) => removeTag(current, tag.id))}
+              onClick={async () => {
+                const nextRegistry = removeTag(localRegistry, tag.id);
+                const nextBindings = removeTagsFromBindings(bindings, [tag.id]);
+                setLocalRegistry(nextRegistry);
+                await onPersist(nextRegistry, nextBindings);
+                setStatus(`Deleted tag "${tag.label}"`);
+              }}
             >
               Delete
             </button>

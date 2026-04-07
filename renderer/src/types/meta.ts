@@ -53,7 +53,7 @@ export type ExportPreset = {
     excludeKeys?: string[];
   };
   composition?: {
-    mode: 'as-is' | 'random-mix' | 'sequence-based';
+    mode: 'as-is' | 'random-mix' | 'sequence-based' | 'mmss-v3';
     pattern?: string;
   };
   slicing?: {

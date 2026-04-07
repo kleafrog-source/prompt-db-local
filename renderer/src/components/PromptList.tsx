@@ -1,5 +1,6 @@
 import type { Tag } from '@/types/meta';
 import type { PromptRecord } from '@/types/prompt';
+import { compactPromptPreview } from '@/utils/promptJson';
 
 type PromptListProps = {
   prompts: PromptRecord[];
@@ -45,7 +46,7 @@ export const PromptList = ({
           onClick={() => onSelectPrompt(prompt.id)}
         >
           <strong>{prompt.name}</strong>
-          <span>{prompt.text.slice(0, 120) || 'No text yet'}</span>
+          <span>{compactPromptPreview(prompt.text, 120)}</span>
           <small>{prompt.keywords.slice(0, 4).join(' • ')}</small>
           <div className="tag-chip-row">
             {resolveTags(prompt.id)

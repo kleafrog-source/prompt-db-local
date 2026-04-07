@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { Server as HttpServer } from 'node:http';
 import path from 'node:path';
@@ -255,6 +256,70 @@ ipcMain.handle(
       directoryPath: targetDir,
       count: payload.files.length,
     };
+  },
+);
+
+ipcMain.handle(
+  'mmss:run-task',
+  async (_event, payload: { script: string; args: string[] }) => {
+    return new Promise((resolve) => {
+      const appPath = app.getAppPath();
+      // Ensure we are in the prompt-db-local directory
+      const workingDir = appPath.endsWith('prompt-db-local') 
+        ? appPath 
+        : path.join(appPath, 'prompt-db-local');
+      
+      const scriptPath = path.join(workingDir, payload.script);
+      
+      console.log(`Running Python task: ${scriptPath} in ${workingDir}`);
+
+      // Try 'python' then 'python3'
+      let pythonExecutable = 'python';
+      
+      const startProcess = (exe: string) => {
+        const pythonProcess = spawn(exe, [scriptPath, ...payload.args], {
+          cwd: workingDir,
+          env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+        });
+
+        let output = '';
+        let error = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+          output += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+          error += data.toString();
+        });
+
+        pythonProcess.on('error', (err) => {
+          if (exe === 'python') {
+            console.log('python not found, trying python3');
+            startProcess('python3');
+          } else {
+            resolve({ ok: false, output: '', error: `Failed to start Python: ${err.message}` });
+          }
+        });
+
+        pythonProcess.on('close', (code) => {
+          if (code === 0) {
+            try {
+              const lines = output.trim().split('\n');
+              const lastLine = lines[lines.length - 1];
+              const data = JSON.parse(lastLine);
+              resolve({ ok: true, output, data });
+            } catch {
+              resolve({ ok: true, output });
+            }
+          } else {
+            resolve({ ok: false, output, error: error || `Exit code ${code}` });
+          }
+        });
+      };
+
+      startProcess(pythonExecutable);
+    });
   },
 );
 

@@ -10,6 +10,11 @@ import type {
 import type { PromptDraft, PromptRecord, PromptSearchFilters } from '@/types/prompt';
 import { createEmptyMetaState } from '@/types/meta';
 import { parseJsonToPrompts } from '@/utils/parser';
+import {
+  derivePromptName,
+  extractPromptPayloadAndServiceMeta,
+  stringifyPromptJson,
+} from '@/utils/promptJson';
 
 type ImportLogEntry = {
   id: string;
@@ -88,7 +93,38 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
   },
   importLog: [],
   loadPrompts: async () => {
-    const prompts = await promptsDb.prompts.orderBy('updated_at').reverse().toArray();
+    const storedPrompts = await promptsDb.prompts.orderBy('updated_at').reverse().toArray();
+    const repairedPrompts = storedPrompts.map((prompt) => {
+      const extracted = extractPromptPayloadAndServiceMeta(prompt.json_data, prompt.serviceMeta);
+      const nextText = stringifyPromptJson(extracted.json);
+      const nextJsonSignature = JSON.stringify(extracted.json);
+      const currentJsonSignature = JSON.stringify(prompt.json_data);
+      const nextName =
+        prompt.name.trim() && prompt.name.trim().toLowerCase() !== 'block id'
+          ? prompt.name
+          : derivePromptName(extracted.json);
+
+      return nextText !== prompt.text ||
+        nextName !== prompt.name ||
+        nextJsonSignature !== currentJsonSignature ||
+        extracted.serviceMeta?.fragmentIndex !== prompt.serviceMeta?.fragmentIndex ||
+        JSON.stringify(extracted.serviceMeta?.items ?? []) !== JSON.stringify(prompt.serviceMeta?.items ?? [])
+        ? {
+            ...prompt,
+            text: nextText,
+            name: nextName,
+            json_data: extracted.json,
+            serviceMeta: extracted.serviceMeta,
+          }
+        : prompt;
+    });
+    const changedPrompts = repairedPrompts.filter((prompt, index) => prompt !== storedPrompts[index]);
+
+    if (changedPrompts.length > 0) {
+      await promptsDb.prompts.bulkPut(changedPrompts);
+    }
+
+    const prompts = repairedPrompts;
 
     if (window.electronAPI) {
       await window.electronAPI.savePromptSnapshot(prompts);

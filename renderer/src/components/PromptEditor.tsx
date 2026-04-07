@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Tag } from '@/types/meta';
-import type { PromptRecord } from '@/types/prompt';
+import type { PromptRecord, PromptServiceMeta } from '@/types/prompt';
+import { isRecord, stringifyPromptJson } from '@/utils/promptJson';
 
 type PromptEditorProps = {
   prompt: PromptRecord | null;
@@ -8,18 +9,17 @@ type PromptEditorProps = {
   onSave: (payload: {
     id?: string;
     name: string;
-    text: string;
     json_data: Record<string, unknown>;
     variables: string[];
     keywords: string[];
     source?: string;
+    serviceMeta?: PromptServiceMeta;
   }) => Promise<void>;
   onDelete: (promptId: string) => Promise<void>;
 };
 
 export const PromptEditor = ({ prompt, promptTags, onSave, onDelete }: PromptEditorProps) => {
   const [name, setName] = useState('');
-  const [text, setText] = useState('');
   const [jsonText, setJsonText] = useState('{}');
   const [variables, setVariables] = useState('');
   const [keywords, setKeywords] = useState('');
@@ -27,7 +27,6 @@ export const PromptEditor = ({ prompt, promptTags, onSave, onDelete }: PromptEdi
   useEffect(() => {
     if (!prompt) {
       setName('');
-      setText('');
       setJsonText('{}');
       setVariables('');
       setKeywords('');
@@ -35,19 +34,21 @@ export const PromptEditor = ({ prompt, promptTags, onSave, onDelete }: PromptEdi
     }
 
     setName(prompt.name);
-    setText(prompt.text);
-    setJsonText(JSON.stringify(prompt.json_data, null, 2));
+    setJsonText(stringifyPromptJson(prompt.json_data));
     setVariables(prompt.variables.join(', '));
     setKeywords(prompt.keywords.join(', '));
   }, [prompt]);
 
   const handleSave = async () => {
-    const parsedJson = JSON.parse(jsonText) as Record<string, unknown>;
+    const parsedJson = JSON.parse(jsonText) as unknown;
+
+    if (!isRecord(parsedJson)) {
+      throw new Error('Prompt JSON must be a JSON object wrapped in { ... }.');
+    }
 
     await onSave({
       id: prompt?.id,
       name,
-      text,
       json_data: parsedJson,
       variables: variables
         .split(',')
@@ -58,6 +59,7 @@ export const PromptEditor = ({ prompt, promptTags, onSave, onDelete }: PromptEdi
         .map((entry) => entry.trim().toLowerCase())
         .filter(Boolean),
       source: prompt?.source,
+      serviceMeta: prompt?.serviceMeta,
     });
   };
 
@@ -100,17 +102,12 @@ export const PromptEditor = ({ prompt, promptTags, onSave, onDelete }: PromptEdi
         </label>
 
         <label className="field field-full">
-          <span>Text</span>
-          <textarea value={text} onChange={(event) => setText(event.target.value)} rows={8} />
-        </label>
-
-        <label className="field">
           <span>Keywords</span>
           <input value={keywords} onChange={(event) => setKeywords(event.target.value)} />
         </label>
 
         <label className="field field-full">
-          <span>JSON payload</span>
+          <span>Prompt JSON</span>
           <textarea
             value={jsonText}
             onChange={(event) => setJsonText(event.target.value)}

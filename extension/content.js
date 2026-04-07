@@ -4,10 +4,12 @@
 let lastInsertedPrompt = null;
 /** @type {Set<string>} */
 const usedPromptIds = new Set();
-let observerStarted = false;
+let sendObserversInstalled = false;
+let activeSendToken = 0;
 
 const BADGE_ATTRIBUTE = 'data-prompt-db-badge';
 const MESSAGE_ATTRIBUTE = 'data-prompt-db-message';
+const MESSAGE_SELECTOR = '.chat-history-part.user-part';
 
 const normalizeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 
@@ -52,54 +54,77 @@ const ensurePromptBadge = (target, payload) => {
 
 const decorateMessageNode = (node, payload) => {
   if (!(node instanceof HTMLElement)) {
-    return;
+    return false;
   }
 
-  if (node.querySelector(`[${BADGE_ATTRIBUTE}="${payload.promptId}"]`)) {
-    return;
+  if (node.getAttribute(MESSAGE_ATTRIBUTE) === payload.promptId) {
+    return true;
   }
 
   node.setAttribute(MESSAGE_ATTRIBUTE, payload.promptId);
   node.style.outline = `2px solid ${payload.tagColor || '#3aa56c'}`;
   node.style.outlineOffset = '4px';
   node.style.borderRadius = '14px';
-  node.style.boxShadow = `0 0 0 4px color-mix(in srgb, ${payload.tagColor || '#3aa56c'} 18%, transparent)`;
+  node.style.boxShadow = `0 0 0 4px ${payload.tagColor || '#3aa56c'}33`;
 
-  const badge = document.createElement('div');
-  badge.setAttribute(BADGE_ATTRIBUTE, payload.promptId);
-  badge.textContent = `#${payload.tagNumber || '?'} sent`;
-  badge.style.display = 'inline-flex';
-  badge.style.alignItems = 'center';
-  badge.style.gap = '6px';
-  badge.style.marginBottom = '8px';
-  badge.style.padding = '4px 10px';
-  badge.style.borderRadius = '999px';
-  badge.style.background = payload.tagColor || '#3aa56c';
-  badge.style.color = '#ffffff';
-  badge.style.fontSize = '11px';
-  badge.style.fontWeight = '700';
-
-  node.prepend(badge);
-};
-
-const findMessageCandidate = (payload) => {
-  const snippet = normalizeText(payload.text).slice(0, 80);
-
-  if (!snippet) {
-    return null;
+  if (!node.querySelector(`[${BADGE_ATTRIBUTE}="${payload.promptId}"]`)) {
+    const badge = document.createElement('div');
+    badge.setAttribute(BADGE_ATTRIBUTE, payload.promptId);
+    badge.textContent = `#${payload.tagNumber || '?'} sent`;
+    badge.style.display = 'inline-flex';
+    badge.style.alignItems = 'center';
+    badge.style.gap = '6px';
+    badge.style.marginBottom = '8px';
+    badge.style.padding = '4px 10px';
+    badge.style.borderRadius = '999px';
+    badge.style.background = payload.tagColor || '#3aa56c';
+    badge.style.color = '#ffffff';
+    badge.style.fontSize = '11px';
+    badge.style.fontWeight = '700';
+    node.prepend(badge);
   }
 
-  const candidates = [...document.querySelectorAll('article, section, div, li, p')]
-    .filter((node) => node instanceof HTMLElement)
-    .filter((node) => !node.matches('textarea, input, form'))
-    .filter((node) => !node.closest(`[${BADGE_ATTRIBUTE}]`))
-    .filter((node) => normalizeText(node.textContent).includes(snippet));
-
-  return /** @type {HTMLElement | null} */ (candidates[candidates.length - 1] || null);
+  return true;
 };
 
-const waitForSentMessageHighlight = (payload) => {
-  const immediate = findMessageCandidate(payload);
+const matchesPromptText = (node, payload) => {
+  const nodeText = normalizeText(node.textContent);
+  const promptText = normalizeText(payload.text);
+
+  if (!nodeText || !promptText) {
+    return false;
+  }
+
+  if (nodeText === promptText) {
+    return true;
+  }
+
+  const shortPrompt = promptText.slice(0, 220);
+  return nodeText.includes(shortPrompt) || shortPrompt.includes(nodeText.slice(0, 180));
+};
+
+const findSentMessageNode = (payload) => {
+  const nodes = [...document.querySelectorAll(MESSAGE_SELECTOR)].filter(
+    (node) => node instanceof HTMLElement,
+  );
+
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const node = /** @type {HTMLElement} */ (nodes[index]);
+
+    if (node.getAttribute(MESSAGE_ATTRIBUTE) === payload.promptId) {
+      return node;
+    }
+
+    if (matchesPromptText(node, payload)) {
+      return node;
+    }
+  }
+
+  return null;
+};
+
+const waitForSentMessageHighlight = (payload, token) => {
+  const immediate = findSentMessageNode(payload);
 
   if (immediate) {
     decorateMessageNode(immediate, payload);
@@ -110,10 +135,17 @@ const waitForSentMessageHighlight = (payload) => {
     const timeout = window.setTimeout(() => {
       observer.disconnect();
       resolve(false);
-    }, 6000);
+    }, 8000);
 
     const observer = new MutationObserver(() => {
-      const candidate = findMessageCandidate(payload);
+      if (token !== activeSendToken) {
+        window.clearTimeout(timeout);
+        observer.disconnect();
+        resolve(false);
+        return;
+      }
+
+      const candidate = findSentMessageNode(payload);
 
       if (!candidate) {
         return;
@@ -148,20 +180,24 @@ const triggerSentMessageFlow = (reason) => {
   }
 
   const payload = lastInsertedPrompt;
+  activeSendToken += 1;
+  const token = activeSendToken;
 
   window.setTimeout(() => {
-    void waitForSentMessageHighlight(payload).finally(() => {
-      void notifyPromptEvent('PROMPT_SENT_MESSAGE', payload);
+    void waitForSentMessageHighlight(payload, token).then((highlighted) => {
+      if (highlighted) {
+        void notifyPromptEvent('PROMPT_SENT_MESSAGE', payload);
+      }
     });
-  }, reason === 'keyboard' ? 450 : 900);
+  }, reason === 'keyboard' ? 400 : 750);
 };
 
 const installSendObservers = () => {
-  if (observerStarted) {
+  if (sendObserversInstalled) {
     return;
   }
 
-  observerStarted = true;
+  sendObserversInstalled = true;
 
   document.addEventListener(
     'keydown',
@@ -255,7 +291,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   ensurePromptBadge(target, lastInsertedPrompt);
   installSendObservers();
-
   void notifyPromptEvent('PROMPT_USED', lastInsertedPrompt);
 
   sendResponse({

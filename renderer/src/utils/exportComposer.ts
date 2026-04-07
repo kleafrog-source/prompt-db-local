@@ -1,10 +1,10 @@
 import type {
   DBElement,
   ExportPreset,
-  KeySequence,
   KeySequencePreset,
   TagRegistry,
 } from '@/types/meta';
+import { sanitizePromptObject } from '@/utils/promptJson';
 import { createTagId } from '@/utils/tagScanner';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -162,7 +162,10 @@ const chooseItem = <T>(
   return items[Math.floor(Math.random() * items.length)] ?? null;
 };
 
-const findFragmentsForSequence = (elements: DBElement[], sequence: KeySequence) => {
+const findFragmentsForSequence = (
+  elements: DBElement[],
+  sequence: KeySequencePreset['sequences'][number],
+) => {
   const parentPath = sequence.pathChain[0];
 
   return elements
@@ -233,12 +236,36 @@ const buildRandomMixItem = (
   };
 };
 
+const buildMMSSV3Item = (elements: DBElement[]) => {
+  // MMSS V3 blocks are specialized. In this mode, we assume the elements 
+  // are already the selection from the builder.
+  // We merge them into one object where each block contributes its technical keys.
+  const output: Record<string, unknown> = {};
+  const sourceElementIds = elements.map(e => e.id);
+
+  elements.forEach((element) => {
+    if (isRecord(element.raw)) {
+      Object.entries(element.raw).forEach(([key, value]) => {
+        // If it's a normalized block, use its domain or a unique key to prevent collisions
+        // But usually MMSS blocks have unique top-level keys like 'rhythmic_grid' etc.
+        output[key] = deepClone(value);
+      });
+    }
+  });
+
+  return {
+    id: createTagId(`mmss_v3_export_${sourceElementIds.slice(0, 3).join('_')}`),
+    sourceElementIds,
+    content: output,
+  };
+};
+
 export async function generateExport(
   elements: DBElement[],
   exportPreset: ExportPreset,
   tagRegistry: TagRegistry,
   sequences: KeySequencePreset[],
-): Promise<{ fileName: string; content: any }[]> {
+): Promise<{ fileName: string; content: Record<string, unknown> | Record<string, unknown>[] }[]> {
   void tagRegistry;
 
   const filtered = filterElements(elements, exportPreset);
@@ -252,6 +279,10 @@ export async function generateExport(
 
   return Array.from({ length: parsedPattern.files }, (_unused, fileIndex) => {
     const items = Array.from({ length: parsedPattern.items }, (_value, itemIndex) => {
+      if (compositionMode === 'mmss-v3') {
+        return buildMMSSV3Item(filtered);
+      }
+
       if (compositionMode === 'random-mix') {
         return buildRandomMixItem(
           filtered,
@@ -286,19 +317,16 @@ export async function generateExport(
 
     const fileId = items[0]?.id || `file_${fileIndex + 1}`;
 
+    const sanitizedItems = items.map((item) =>
+      sanitizePromptObject(item.content as Record<string, unknown>),
+    );
+
     return {
       fileName: fillPattern(fileNamePattern, {
         index: fileIndex + 1,
         id: fileId,
       }),
-      content: {
-        type: 'prompt-db-generated-export',
-        exportPresetId: exportPreset.id,
-        label: exportPreset.label,
-        compositionMode,
-        itemCount: items.length,
-        items,
-      },
+      content: sanitizedItems.length === 1 ? sanitizedItems[0] : sanitizedItems,
     };
   });
 }

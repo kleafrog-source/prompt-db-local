@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { PromptDraft, PromptRecord } from '@/types/prompt';
 import { extractKeywords } from '@/utils/keywords';
+import { derivePromptName, stringifyPromptJson } from '@/utils/promptJson';
 
 export const PROMPTS_DB_NAME = 'prompt-db-local-v3';
 
@@ -74,19 +75,20 @@ export const clearPromptsDb = async () => {
 
 export const normalizePromptDraft = (draft: PromptDraft): PromptRecord => {
   const now = new Date().toISOString();
+  const text = stringifyPromptJson(draft.json_data);
   const mergedKeywords = Array.from(
-    new Set([...(draft.keywords ?? []), ...extractKeywords(draft.text)]),
+    new Set([...(draft.keywords ?? []), ...extractKeywords(text)]),
   ).slice(0, 20);
 
   return {
     id: draft.id ?? crypto.randomUUID(),
-    name: draft.name.trim() || 'Untitled prompt',
-    text: draft.text.trim(),
+    name: draft.name.trim() || derivePromptName(draft.json_data),
+    text,
     json_data: draft.json_data,
     fingerprint:
       draft.fingerprint ??
       createPromptFingerprint({
-        text: draft.text,
+        text,
         json_data: draft.json_data,
       }),
     variables: Array.from(new Set(draft.variables ?? [])),
@@ -94,5 +96,6 @@ export const normalizePromptDraft = (draft: PromptDraft): PromptRecord => {
     created_at: draft.created_at ?? now,
     updated_at: now,
     source: draft.source,
+    serviceMeta: draft.serviceMeta,
   };
 };

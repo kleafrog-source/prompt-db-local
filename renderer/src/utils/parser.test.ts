@@ -2,108 +2,80 @@ import { describe, expect, it } from 'vitest';
 import { parseJsonToPrompts } from '@/utils/parser';
 
 describe('parseJsonToPrompts', () => {
-  it('finds nested prompt-like blocks and keeps variables', () => {
+  it('imports a strict JSON object as a single prompt block', () => {
     const rawJson = JSON.stringify({
-      session: {
-        steps: [
-          {
-            name: 'system intro',
-            system: 'Speak to {{audience}} with a {{tone}} tone.',
-            variables: ['audience', 'tone'],
-          },
-          {
-            nested: {
-              title: 'template card',
-              template: 'Summarize {{topic}} in 3 bullets.',
-              keywords: ['summary', 'topic'],
-            },
-          },
-        ],
+      id: 'drum_block_alpha',
+      title: 'Drum Block Alpha',
+      micro_dynamic_shaping_v4: {
+        kick_transient_geometry: {
+          click_layer: 'alpha-click',
+          body_layer: 'alpha-body',
+        },
       },
     });
 
     const prompts = parseJsonToPrompts(rawJson, { source: 'test-import' });
-
-    expect(prompts).toHaveLength(2);
-    expect(prompts[0]?.variables).toEqual(['audience', 'tone']);
-    expect(prompts[1]?.name).toBe('template card');
-    expect(prompts[1]?.keywords).toContain('summary');
-    expect(prompts[1]?.source).toBe('test-import');
-  });
-
-  it('falls back to importing a plain json object when no prompt keys exist', () => {
-    const rawJson = JSON.stringify({
-      data: {
-        id: 42,
-        title: 'not a prompt',
-      },
-    });
-
-    const prompts = parseJsonToPrompts(rawJson);
+    const first = prompts[0]!;
 
     expect(prompts).toHaveLength(1);
-    expect(prompts[0]?.name).toBe('data');
-    expect(prompts[0]?.text).toContain('not a prompt');
+    expect(first.name).toBe('Drum Block Alpha');
+    expect(first.text!.trim().startsWith('{')).toBe(true);
+    expect(first.text!.trim().endsWith('}')).toBe(true);
+    expect(first.source).toBe('test-import');
+    expect(first.serviceMeta?.fragmentIndex).toBe(0);
   });
 
-  it('extracts prompt blocks from mixed text with invalid top-level json', () => {
+  it('extracts only valid JSON object fragments from mixed text', () => {
     const rawText = `
-      Session export start
-      {"meta":{"session":"abc"}}
-      some human note between blocks
-      {
-        "name": "messy prompt",
-        "template": "Create a brief for {{client}} in {{language}}.",
-        "variables": [{"name":"client"}, {"name":"language"}]
-      }
-      trailing commentary that breaks JSON.parse
-      {"prompt":"Final cinematic shot with mist and warm backlight","keywords":["cinematic","mist"]}
+      heading that must be ignored
+      {"title":"First Block","kick":"alpha"}
+      plain text wrapper between fragments
+      {"title":"Second Block","snare":"beta"}
+      trailing commentary
     `;
 
     const prompts = parseJsonToPrompts(rawText, { source: 'mixed-doc' });
 
-    expect(prompts).toHaveLength(3);
-    expect(prompts[1]?.name).toBe('messy prompt');
-    expect(prompts[1]?.variables).toEqual(['client', 'language']);
-    expect(prompts[2]?.text).toContain('Final cinematic shot');
-    expect(prompts[2]?.keywords).toContain('cinematic');
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]?.name).toBe('First Block');
+    expect(prompts[1]?.name).toBe('Second Block');
+    expect(prompts[0]?.text).not.toContain('heading that must be ignored');
+    expect(prompts[1]?.text).not.toContain('trailing commentary');
   });
 
-  it('accepts fuzzy prompt field names like content and instruction', () => {
-    const rawJson = JSON.stringify({
-      flow: {
-        name: 'producer import',
-        content: 'Describe the product benefit for {{audience}}.',
-        instruction: 'Keep the tone credible and concise.',
-      },
-    });
+  it('keeps service metadata out of prompt text', () => {
+    const rawText = `
+      {
+        "id": "block_a",
+        "__fragmentIndex": 99,
+        "items": [{"id": "x", "sourceElementIds": ["root-1"]}],
+        "payload": {"mode": "strict"}
+      }
+    `;
 
-    const prompts = parseJsonToPrompts(rawJson);
+    const prompts = parseJsonToPrompts(rawText);
+    const first = prompts[0]!;
 
     expect(prompts).toHaveLength(1);
-    expect(prompts[0]?.text).toContain('Describe the product benefit');
-    expect(prompts[0]?.text).toContain('Keep the tone credible');
-    expect(prompts[0]?.variables).toContain('audience');
+    expect(first.text).not.toContain('__fragmentIndex');
+    expect(first.text).not.toContain('sourceElementIds');
+    expect(first.serviceMeta?.fragmentIndex).toBe(99);
+    expect(first.serviceMeta?.items).toEqual([{ id: 'x', sourceElementIds: ['root-1'] }]);
   });
 
-  it('imports plain json fragments even without prompt-specific keys', () => {
+  it('creates human-readable fallback names instead of generic block id labels', () => {
     const rawText = `
-      Block 17: Quaternion geometry
       {
-        "macro_name": "MLGS_QUATERNION_GEOMETRIC_UNITY_v3.0",
-        "engine_type": "4D_Vector_Spatializer",
-        "processing_rules": {
-          "phase_coherence": "Maintain > 0.95 during 4D translations",
-          "spatial_fractal": "Recursive delay lines at Golden Ratio intervals"
+        "id": "block id",
+        "signal_flow_purity_v4": {
+          "phase_alignment_check": "tight"
         }
       }
     `;
 
-    const prompts = parseJsonToPrompts(rawText, { source: 'mixed-doc' });
+    const prompts = parseJsonToPrompts(rawText);
 
     expect(prompts).toHaveLength(1);
-    expect(prompts[0]?.name).toBe('MLGS_QUATERNION_GEOMETRIC_UNITY_v3.0');
-    expect(prompts[0]?.text).toContain('4D_Vector_Spatializer');
-    expect(prompts[0]?.text).toContain('phase_coherence');
+    expect(prompts[0]?.name).toBe('signal flow purity v4');
   });
 });

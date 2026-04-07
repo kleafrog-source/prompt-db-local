@@ -71,6 +71,13 @@ export type PromptSnapshotRecord = {
   created_at: string;
   updated_at: string;
   source?: string;
+  serviceMeta?: {
+    fragmentIndex?: number;
+    items?: Array<{
+      id: string;
+      sourceElementIds: string[];
+    }>;
+  };
 };
 
 export type PromptUsageLogEntry = {
