@@ -1,5 +1,6 @@
 // Φ_total(sessions:ui) — панель управления Producer AI сессиями
 // Отображает сессии по аккаунтам, предложения от Mistral, позволяет применять их
+// Интеграция MistralChat и AccountManager для полноценного Φ_total анализа
 
 import React, { useEffect, useState, useCallback } from 'react';
 import {
@@ -8,6 +9,9 @@ import {
   type AutobatchConfig,
 } from '@/services/SessionStateManager';
 import { applyPhiTotal } from '@/services/MistralService';
+import { MistralChat } from './MistralChat';
+import { AccountManager } from './AccountManager';
+import { ManualSessionInput } from './ManualSessionInput';
 
 interface SessionPanelProps {
   onApplySuggestion?: (suggestion: string, sessionId: string) => void;
@@ -20,7 +24,7 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
 }) => {
   const manager = useSessionManager();
   const [sessions, setSessions] = useState<ProducerSession[]>([]);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'sessions' | 'chat' | 'autobatch'>('sessions');
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [selectedSession, setSelectedSession] = useState<ProducerSession | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -116,6 +120,30 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
 
   return (
     <div style={styles.container}>
+      {/* Account Manager — добавление реальных аккаунтов */}
+      <AccountManager
+        onAccountAdded={(accountId, accountName) => {
+          console.log('Φ_total(account:added)', { accountId, accountName });
+        }}
+        onSessionCreated={(session) => {
+          setSelectedSession(session);
+          console.log('Φ_total(session:created)', session);
+        }}
+      />
+
+      {/* Manual Input — ручной ввод без Chrome Extension */}
+      <ManualSessionInput
+        onSessionCreated={(sessionId) => {
+          const session = manager.getAllSessions().find(s => s.id === sessionId);
+          if (session) setSelectedSession(session);
+        }}
+        onMessageAdded={() => {
+          // Обновляем список сессий
+          setSessions(manager.getAllSessions());
+        }}
+      />
+
+      {/* Header */}
       <div style={styles.header}>
         <div style={styles.headerLeft}>
           <h2 style={styles.title}>
@@ -126,6 +154,7 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
           <div style={styles.headerStats}>
             <span style={styles.stat}>{totalSessions} sessions</span>
             <span style={styles.stat}>{totalMessages} messages</span>
+            <span style={styles.stat}>{accounts.length} accounts</span>
           </div>
         </div>
         <select
@@ -142,128 +171,184 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
         </select>
       </div>
 
-      <div style={styles.content}>
-        {/* Список сессий */}
-        <div style={styles.sessionList}>
-          {filteredSessions.length === 0 ? (
-            <div style={styles.empty}>No sessions yet</div>
-          ) : (
-            filteredSessions.map((session) => (
-              <div
-                key={session.id}
-                style={{
-                  ...styles.sessionCard,
-                  ...(selectedSession?.id === session.id ? styles.sessionCardActive : {}),
-                }}
-                onClick={() => setSelectedSession(session)}
-              >
-                <div style={styles.sessionHeader}>
-                  <span style={styles.sessionName}>{session.name}</span>
-                  <span style={styles.messageCount}>{session.messages.length} msgs</span>
-                </div>
-                <div style={styles.sessionMeta}>
-                  <span>{session.accountName}</span>
-                  <span>{new Date(session.updatedAt).toLocaleTimeString()}</span>
-                </div>
-                {session.summary && (
-                  <div style={styles.sessionSummary}>{session.summary.slice(0, 100)}...</div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
+      {/* Tabs */}
+      <div style={styles.tabs}>
+        <button 
+          style={{ ...styles.tab, ...(activeTab === 'sessions' ? styles.tabActive : {}) }}
+          onClick={() => setActiveTab('sessions')}
+        >
+          📋 Sessions & Messages
+        </button>
+        <button 
+          style={{ ...styles.tab, ...(activeTab === 'chat' ? styles.tabActive : {}) }}
+          onClick={() => setActiveTab('chat')}
+        >
+          💬 Φ_total Chat
+        </button>
+        <button 
+          style={{ ...styles.tab, ...(activeTab === 'autobatch' ? styles.tabActive : {}) }}
+          onClick={() => setActiveTab('autobatch')}
+        >
+          ⚙️ Autobatch
+        </button>
+      </div>
 
-        {/* Детали сессии */}
-        <div style={styles.sessionDetail}>
-          {selectedSession ? (
-            <>
-              <div style={styles.detailHeader}>
-                <h3>{selectedSession.name}</h3>
-                <div style={styles.detailActions}>
-                  <button
-                    style={styles.button}
-                    onClick={() => analyzeSession(selectedSession)}
-                    disabled={isAnalyzing}
-                  >
-                    {isAnalyzing ? 'Φ_total(analyzing)...' : 'Φ_total(analyze)'}
-                  </button>
-                  {onExportSession && (
+      {/* Tab Content */}
+      {activeTab === 'sessions' && (
+        <div style={styles.content}>
+          {/* Session List */}
+          <div style={styles.sessionList}>
+            {filteredSessions.length === 0 ? (
+              <div style={styles.empty}>
+                <div style={styles.emptyIcon}>📭</div>
+                <div>No sessions yet</div>
+                <div style={styles.emptyHint}>
+                  💡 <strong>No Chrome Extension?</strong> No problem!<br />
+                  Use ✍️ <strong>Manual Message Input</strong> above to create sessions<br />
+                  and chat with Mistral AI instantly!
+                </div>
+              </div>
+            ) : (
+              filteredSessions.map((session) => (
+                <div
+                  key={session.id}
+                  style={{
+                    ...styles.sessionCard,
+                    ...(selectedSession?.id === session.id ? styles.sessionCardActive : {}),
+                  }}
+                  onClick={() => setSelectedSession(session)}
+                >
+                  <div style={styles.sessionHeader}>
+                    <span style={styles.sessionName}>{session.name}</span>
+                    <span style={styles.messageCount}>{session.messages.length} msgs</span>
+                  </div>
+                  <div style={styles.sessionMeta}>
+                    <span>{session.accountName}</span>
+                    <span>{new Date(session.updatedAt).toLocaleTimeString()}</span>
+                  </div>
+                  {session.summary && (
+                    <div style={styles.sessionSummary}>{session.summary.slice(0, 100)}...</div>
+                  )}
+                  {session.suggestedNextSteps && session.suggestedNextSteps.length > 0 && (
+                    <div style={styles.hasSuggestions}>💡 {session.suggestedNextSteps.length} suggestions</div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Session Detail */}
+          <div style={styles.sessionDetail}>
+            {selectedSession ? (
+              <>
+                <div style={styles.detailHeader}>
+                  <h3>{selectedSession.name}</h3>
+                  <div style={styles.detailActions}>
+                    <button
+                      style={styles.button}
+                      onClick={() => analyzeSession(selectedSession)}
+                      disabled={isAnalyzing}
+                    >
+                      {isAnalyzing ? '⏳ Φ_total...' : '🔬 Φ_total'}
+                    </button>
                     <button
                       style={styles.buttonSecondary}
-                      onClick={() => onExportSession(selectedSession)}
+                      onClick={() => setActiveTab('chat')}
                     >
-                      Export
+                      💬 Chat
                     </button>
-                  )}
-                </div>
-              </div>
-
-              <div style={styles.messagesList}>
-                <h4>Messages</h4>
-                {selectedSession.messages.map((msg, idx) => (
-                  <div key={msg.id} style={styles.message}>
-                    <div style={styles.messageHeader}>
-                      <span>#{idx + 1}</span>
-                      <span style={styles.complexity}>
-                        complexity: {(msg.metadata.complexity * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div style={styles.messageContent}>{msg.content.slice(0, 200)}...</div>
-                    <div style={styles.messageMeta}>
-                      keywords: {msg.metadata.keywords.join(', ')}
-                    </div>
+                    {onExportSession && (
+                      <button
+                        style={styles.buttonSecondary}
+                        onClick={() => onExportSession(selectedSession)}
+                      >
+                        📤 Export
+                      </button>
+                    )}
                   </div>
-                ))}
-              </div>
+                </div>
 
-              {/* Результат анализа */}
-              {analysisResult && selectedSession.id === selectedSession.id && (
-                <div style={styles.analysisResult}>
-                  <h4>Φ_total Analysis</h4>
-                  <div style={styles.summary}>{analysisResult.summary}</div>
-                  <h5>Suggested Next Steps:</h5>
-                  <ul style={styles.suggestions}>
-                    {analysisResult.suggestions.map((suggestion, idx) => (
-                      <li key={idx} style={styles.suggestionItem}>
-                        {suggestion}
-                        {onApplySuggestion && (
-                          <button
-                            style={styles.applyButton}
-                            onClick={() => onApplySuggestion(suggestion, selectedSession.id)}
-                          >
-                            Apply
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                  {analysisResult.tokens && (
-                    <div style={styles.tokens}>
-                      tokens: {analysisResult.tokens.total} 
-                      (prompt: {analysisResult.tokens.prompt}, 
-                       completion: {analysisResult.tokens.completion})
+                <div style={styles.messagesList}>
+                  <h4>📝 Messages ({selectedSession.messages.length})</h4>
+                  {selectedSession.messages.map((msg, idx) => (
+                    <div key={msg.id} style={styles.message}>
+                      <div style={styles.messageHeader}>
+                        <span>#{idx + 1}</span>
+                        <span style={styles.complexity}>
+                          complexity: {(msg.metadata.complexity * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div style={styles.messageContent}>{msg.content.slice(0, 200)}...</div>
+                      <div style={styles.messageMeta}>
+                        <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                        <span>intent: {msg.metadata.intent}</span>
+                      </div>
                     </div>
-                  )}
+                  ))}
                 </div>
-              )}
 
-              {/* Сохранённые предложения сессии */}
-              {selectedSession.suggestedNextSteps && !analysisResult && (
-                <div style={styles.savedSuggestions}>
-                  <h4>Previous Suggestions</h4>
-                  <ul>
-                    {selectedSession.suggestedNextSteps.map((step, idx) => (
-                      <li key={idx}>{step}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </>
-          ) : (
-            <div style={styles.emptyDetail}>Select a session to view details</div>
-          )}
+                {/* Analysis Results */}
+                {analysisResult && (
+                  <div style={styles.analysisResult}>
+                    <h4>🔬 Φ_total Analysis Results</h4>
+                    <p style={styles.summary}>{analysisResult.summary}</p>
+                    <div style={styles.suggestions}>
+                      <h5>💡 Suggestions:</h5>
+                      <ul>
+                        {analysisResult.suggestions.map((s, i) => (
+                          <li key={i}>
+                            {s}
+                            {onApplySuggestion && (
+                              <button
+                                style={styles.applyBtn}
+                                onClick={() => onApplySuggestion(s, selectedSession.id)}
+                              >
+                                ✓ Apply
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    {analysisResult.tokens && (
+                      <div style={styles.tokens}>
+                        🪙 Tokens: {analysisResult.tokens.total} (P: {analysisResult.tokens.prompt}, C:{" "}
+                        {analysisResult.tokens.completion})
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Saved Suggestions */}
+                {selectedSession.suggestedNextSteps && selectedSession.suggestedNextSteps.length > 0 && !analysisResult && (
+                  <div style={styles.savedSuggestions}>
+                    <h4>💡 Previous Suggestions</h4>
+                    <ul>
+                      {selectedSession.suggestedNextSteps.map((step, idx) => (
+                        <li key={idx}>{step}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={styles.emptyDetail}>
+                <div style={styles.emptyIcon}>👈</div>
+                <div>Select a session to view details and run Φ_total analysis</div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === 'chat' && (
+        <MistralChat 
+          session={selectedSession}
+          context={selectedSession ? manager.getSessionContext(selectedSession.id)?.recentContext : undefined}
+        />
+      )}
+
+      {activeTab === 'autobatch' && <AutobatchConfigPanel />}
     </div>
   );
 };
@@ -538,6 +623,28 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #00d4aa',
     borderRadius: '4px',
   },
+  tabs: {
+    display: 'flex',
+    gap: '4px',
+    marginBottom: '20px',
+    borderBottom: '1px solid #3a3a6e',
+    paddingBottom: '10px',
+  },
+  tab: {
+    padding: '10px 20px',
+    background: '#2a2a4e',
+    color: '#888',
+    border: 'none',
+    borderRadius: '6px 6px 0 0',
+    cursor: 'pointer',
+    fontSize: '0.95em',
+    transition: 'all 0.2s',
+  },
+  tabActive: {
+    background: '#00d4aa',
+    color: '#1a1a2e',
+    fontWeight: 'bold',
+  },
   content: {
     display: 'flex',
     gap: '20px',
@@ -600,6 +707,26 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     color: '#666',
     padding: '100px 40px',
+  },
+  emptyIcon: {
+    fontSize: '3em',
+    marginBottom: '16px',
+    opacity: 0.5,
+  },
+  emptyHint: {
+    fontSize: '0.85em',
+    color: '#888',
+    marginTop: '12px',
+    maxWidth: '250px',
+  },
+  hasSuggestions: {
+    marginTop: '8px',
+    padding: '4px 8px',
+    background: 'rgba(0, 212, 170, 0.2)',
+    color: '#00d4aa',
+    borderRadius: '4px',
+    fontSize: '0.8em',
+    display: 'inline-block',
   },
   detailHeader: {
     display: 'flex',

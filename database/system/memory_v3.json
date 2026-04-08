@@ -71,14 +71,14 @@
       "lineage_score": 0.5
     },
     "110": {
-      "usage_count": 8,
+      "usage_count": 9,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "101": {
-      "usage_count": 13,
+      "usage_count": 14,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -113,14 +113,14 @@
       "lineage_score": 0.5
     },
     "34": {
-      "usage_count": 4,
+      "usage_count": 5,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "12": {
-      "usage_count": 10,
+      "usage_count": 11,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -197,7 +197,7 @@
       "lineage_score": 0.5
     },
     "21": {
-      "usage_count": 4,
+      "usage_count": 5,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -211,7 +211,7 @@
       "lineage_score": 0.5
     },
     "2": {
-      "usage_count": 8,
+      "usage_count": 9,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -442,7 +442,7 @@
       "lineage_score": 0.5
     },
     "88": {
-      "usage_count": 2,
+      "usage_count": 3,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1023,7 +1023,7 @@
       "lineage_score": 0.5
     },
     "67": {
-      "usage_count": 2,
+      "usage_count": 3,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1429,7 +1429,7 @@
       "lineage_score": 0.5
     },
     "15": {
-      "usage_count": 5,
+      "usage_count": 6,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -2213,7 +2213,7 @@
       "lineage_score": 0.5
     },
     "93": {
-      "usage_count": 2,
+      "usage_count": 3,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -2846,13 +2846,19 @@
       "meta_135": 0.1,
       "90": 0.1,
       "107": 0.1,
-      "12": 0.1,
-      "110": 0.1,
+      "12": 0.2,
+      "110": 0.2,
       "87": 0.1,
-      "15": 0.1,
+      "15": 0.2,
       "meta_147": 0.1,
       "1": 0.1,
-      "2": 0.1
+      "2": 0.2,
+      "101": 0.1,
+      "93": 0.1,
+      "88": 0.1,
+      "21": 0.1,
+      "67": 0.1,
+      "34": 0.1
     }
   },
   "generation_stats": {}
