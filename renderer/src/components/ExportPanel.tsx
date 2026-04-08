@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+// Φ_total(imports) — импорты эволюционируют с системой
 import type { DBElement, ElementTagBinding, ExportPreset, KeySequencePreset, TagRegistry } from '@/types/meta';
 import type { PromptRecord } from '@/types/prompt';
 import { generateExport, parseCompositionPattern } from '@/utils/exportComposer';
@@ -21,6 +22,7 @@ const sanitizeFileName = (value: string) =>
     .slice(0, 120) || 'prompt_export';
 
 const createDefaultPreset = (): ExportPreset => ({
+  // Φ_total(default_preset) — пресет по умолчанию с базовыми правилами
   id: 'default_export',
   label: 'Default Export',
   filters: {
@@ -32,6 +34,12 @@ const createDefaultPreset = (): ExportPreset => ({
   composition: {
     mode: 'as-is',
     pattern: '3x12 random',
+    rules: {
+      composition_rules: [
+        { name: 'layer_balance', logic: 'must_include_layers', value: [1, 2, 3] },
+        { name: 'domain_spread', logic: 'min_domains', value: 2 },
+      ],
+    },
   },
   slicing: {
     useKeySequences: [],
@@ -245,6 +253,9 @@ export const ExportPanel = ({
             <option value="as-is">as-is</option>
             <option value="random-mix">random-mix</option>
             <option value="sequence-based">sequence-based</option>
+            <option value="mmss-v3">mmss-v3 (AI Builder)</option>
+            <option value="rule-engine">rule-engine (Layer/Domains)</option>
+            <option value="Φ_total">Φ_total (Meta Evolution)</option>
           </select>
         </label>
 
@@ -264,6 +275,74 @@ export const ExportPanel = ({
             placeholder="6x12 random"
           />
         </label>
+
+        {draft.composition?.mode === 'rule-engine' && (
+          <div className="rule-config">
+            {/* Φ_total(rule_config) — конфигурация правил для rule-engine */}
+            <label className="field">
+              <span>Required Layers (comma-separated)</span>
+              <input
+                value={String(draft.composition?.rules?.composition_rules
+                  .find((r) => r.logic === 'must_include_layers')?.value ?? '1, 2, 3')}
+                onChange={(event) => {
+                  const layers = event.target.value.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !Number.isNaN(n));
+                  setDraft((current) => {
+                    const currentRules = current.composition?.rules ?? {
+                      composition_rules: [
+                        { name: 'layer_balance', logic: 'must_include_layers', value: [1, 2, 3] },
+                        { name: 'domain_spread', logic: 'min_domains', value: 2 },
+                      ],
+                    };
+                    const otherRules = currentRules.composition_rules.filter((r) => r.logic !== 'must_include_layers');
+                    return {
+                      ...current,
+                      composition: {
+                        mode: current.composition?.mode ?? 'as-is',
+                        pattern: current.composition?.pattern ?? '3x12 random',
+                        rules: {
+                          composition_rules: [...otherRules, { name: 'layer_balance', logic: 'must_include_layers', value: layers }],
+                        },
+                      },
+                    } as ExportPreset;
+                  });
+                }}
+                placeholder="1, 2, 3"
+              />
+            </label>
+
+            <label className="field">
+              <span>Min Domains</span>
+              <input
+                type="number"
+                min={1}
+                max={4}
+                value={Number(draft.composition?.rules?.composition_rules.find((r) => r.logic === 'min_domains')?.value ?? 2)}
+                onChange={(event) => {
+                  const minDomains = Math.max(1, Number(event.target.value) || 1);
+                  setDraft((current) => {
+                    const currentRules = current.composition?.rules ?? {
+                      composition_rules: [
+                        { name: 'layer_balance', logic: 'must_include_layers', value: [1, 2, 3] },
+                        { name: 'domain_spread', logic: 'min_domains', value: 2 },
+                      ],
+                    };
+                    const otherRules = currentRules.composition_rules.filter((r) => r.logic !== 'min_domains');
+                    return {
+                      ...current,
+                      composition: {
+                        mode: current.composition?.mode ?? 'as-is',
+                        pattern: current.composition?.pattern ?? '3x12 random',
+                        rules: {
+                          composition_rules: [...otherRules, { name: 'domain_spread', logic: 'min_domains', value: minDomains }],
+                        },
+                      },
+                    } as ExportPreset;
+                  });
+                }}
+              />
+            </label>
+          </div>
+        )}
 
         <label className="field">
           <span>Include tags</span>

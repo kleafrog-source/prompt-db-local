@@ -7,6 +7,19 @@ import type {
 import { sanitizePromptObject } from '@/utils/promptJson';
 import { createTagId } from '@/utils/tagScanner';
 
+// Φ_total(types) — типы эволюционируют с системой
+export interface Rule {
+  name: string;
+  logic: 'must_include_layers' | 'min_domains' | 'conditional_requirement';
+  value?: number[] | number;
+  if?: Record<string, unknown>;
+  then?: Record<string, unknown>;
+}
+
+export interface RuleSet {
+  composition_rules: Rule[];
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -236,12 +249,133 @@ const buildRandomMixItem = (
   };
 };
 
+const buildRuleEngineItem = (
+  elements: DBElement[],
+  rules: RuleSet,
+  itemIndex: number,
+  maxBlocksPerElement = 8,
+) => {
+  // Φ_total(rule_engine) — правила эволюционируют через применение
+  const output: Record<string, unknown> = {};
+  const sourceElementIds: string[] = [];
+  
+  // Filter elements that satisfy basic rules
+  const eligibleElements = elements.filter((element) => {
+    if (!isRecord(element.raw)) return false;
+    
+    // Check if element has required attributes
+    const attr = element.raw.attr as Record<string, unknown> | undefined;
+    if (!attr) return false;
+    
+    // Validate against rules
+    const layer = attr.layer as number | undefined;
+    const domain = attr.domain as string | undefined;
+    
+    // Must include layers rule
+    const layerRules = rules.composition_rules.filter((r: Rule) => r.logic === 'must_include_layers');
+    if (layerRules.length > 0 && layer === undefined) {
+      return false;
+    }
+    
+    // Domain spread rule
+    const domainRules = rules.composition_rules.filter((r: Rule) => r.logic === 'min_domains');
+    if (domainRules.length > 0 && domain === undefined) {
+      return false;
+    }
+    
+    return true;
+  });
+  
+  // Group by layer to satisfy must_include_layers
+  const elementsByLayer = new Map<number, DBElement[]>();
+  eligibleElements.forEach((el) => {
+    const raw = el.raw as Record<string, unknown>;
+    const attr = raw.attr as Record<string, unknown> | undefined;
+    const layer = attr?.layer as number;
+    if (typeof layer === 'number') {
+      if (!elementsByLayer.has(layer)) {
+        elementsByLayer.set(layer, []);
+      }
+      elementsByLayer.get(layer)?.push(el);
+    }
+  });
+  
+  // Select blocks ensuring layer coverage
+  const layerRules = rules.composition_rules.filter((r: Rule) => r.logic === 'must_include_layers');
+  const requiredLayers = new Set<number>();
+  layerRules.forEach((rule: Rule) => {
+    (rule.value as number[]).forEach((l: number) => requiredLayers.add(l));
+  });
+  
+  let blockCount = 0;
+  
+  // First pass: ensure required layers
+  requiredLayers.forEach((layer) => {
+    if (blockCount >= maxBlocksPerElement) return;
+    const layerElements = elementsByLayer.get(layer) || [];
+    if (layerElements.length > 0) {
+      const selected = layerElements[(itemIndex + layer) % layerElements.length];
+      if (isRecord(selected.raw)) {
+        Object.entries(selected.raw).forEach(([key, value]) => {
+          if (output[key] === undefined) {
+            output[key] = deepClone(value);
+            sourceElementIds.push(selected.id);
+            blockCount++;
+          }
+        });
+      }
+    }
+  });
+  
+  // Second pass: fill remaining slots with domain spread
+  const minDomainsRule = rules.composition_rules.find((r: Rule) => r.logic === 'min_domains');
+  const minDomains = minDomainsRule?.value as number | undefined;
+  
+  if (minDomains && blockCount < maxBlocksPerElement) {
+    const domainsPresent = new Set<string>();
+    Object.values(output).forEach((block) => {
+      if (isRecord(block) && isRecord(block.attr)) {
+        domainsPresent.add(String(block.attr.domain));
+      }
+    });
+    
+    // Add more elements to satisfy domain spread
+    const remaining = eligibleElements.filter((el) => !sourceElementIds.includes(el.id));
+    const shuffled = shuffle(remaining);
+    
+    for (const element of shuffled) {
+      if (blockCount >= maxBlocksPerElement) break;
+      if (domainsPresent.size >= minDomains && blockCount >= requiredLayers.size) break;
+      
+      if (isRecord(element.raw)) {
+        const attr = element.raw.attr as Record<string, unknown> | undefined;
+        const domain = attr?.domain as string | undefined;
+        
+        Object.entries(element.raw).forEach(([key, value]) => {
+          if (blockCount >= maxBlocksPerElement) return;
+          if (output[key] === undefined) {
+            output[key] = deepClone(value);
+            sourceElementIds.push(element.id);
+            blockCount++;
+            if (domain) domainsPresent.add(domain);
+          }
+        });
+      }
+    }
+  }
+  
+  return {
+    id: createTagId(`rule_engine_${itemIndex}_${sourceElementIds.slice(0, 3).join('_')}`),
+    sourceElementIds: Array.from(new Set(sourceElementIds)),
+    content: output,
+  };
+};
 const buildMMSSV3Item = (elements: DBElement[]) => {
-  // MMSS V3 blocks are specialized. In this mode, we assume the elements 
-  // are already the selection from the builder.
+  // Φ_total(mmss_v3) — MMSS V3 blocks are specialized
+  // In this mode, we assume the elements are already the selection from the builder.
   // We merge them into one object where each block contributes its technical keys.
   const output: Record<string, unknown> = {};
-  const sourceElementIds = elements.map(e => e.id);
+  const sourceElementIds = elements.map((e) => e.id);
 
   elements.forEach((element) => {
     if (isRecord(element.raw)) {
@@ -279,6 +413,22 @@ export async function generateExport(
 
   return Array.from({ length: parsedPattern.files }, (_unused, fileIndex) => {
     const items = Array.from({ length: parsedPattern.items }, (_value, itemIndex) => {
+      if (compositionMode === 'rule-engine') {
+        // Φ_total(rule_engine_mode) — интеграция с Python rule_engine.py
+        const defaultRules: RuleSet = {
+          composition_rules: [
+            { name: 'layer_balance', logic: 'must_include_layers', value: [1, 2, 3] },
+            { name: 'domain_spread', logic: 'min_domains', value: 2 },
+          ],
+        };
+        return buildRuleEngineItem(
+          filtered,
+          (exportPreset.composition as unknown as { rules: RuleSet }).rules ?? defaultRules,
+          fileIndex * parsedPattern.items + itemIndex,
+          exportPreset.slicing?.maxBlocksPerElement,
+        );
+      }
+
       if (compositionMode === 'mmss-v3') {
         return buildMMSSV3Item(filtered);
       }

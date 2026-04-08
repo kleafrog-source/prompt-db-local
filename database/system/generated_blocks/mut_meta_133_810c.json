@@ -1,11 +1,11 @@
 {
-  "id": "meta_133",
+  "id": "mut_meta_133_810c",
   "op": "M",
   "attr": {
     "domain": "Rhythm",
     "phase": "emergence",
     "layer": 3,
-    "priority": 0.5
+    "priority": 0.6
   },
   "dna": {
     "seed_ref": "meta_133",
@@ -23,7 +23,7 @@
   },
   "meta": {
     "intent": "unknown",
-    "confidence": 0.7
+    "confidence": 0.6
   },
   "legacy": {
     "industrial_sublime_v3": {
@@ -35,5 +35,12 @@
       },
       "behavior": "ASE must prioritize 'Architectural-Scale' over 'Human-Emotion'."
     }
+  },
+  "origin": {
+    "mode": "mutation",
+    "parents": [
+      "meta_133"
+    ],
+    "mutation_type": "detail_amplification"
   }
 }
