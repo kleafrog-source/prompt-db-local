@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import dotenv from 'dotenv';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { Server as HttpServer } from 'node:http';
@@ -13,6 +14,9 @@ import {
   type PromptDbMetaState,
   type PromptSnapshotRecord,
 } from './metaStore';
+
+// Load environment variables from .env file
+dotenv.config();
 
 type SessionContext = {
   accountId: string;
@@ -343,7 +347,8 @@ ipcMain.handle(
   },
 );
 
-const MISTRAL_API_KEY = '188W4mPcZuJC3Nu9TjuxscZyRvSmqLGq';
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || '';
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
 // Φ_total(mistral) — Mistral API как координирующий слой для эволюции
 ipcMain.handle(
@@ -357,7 +362,7 @@ ipcMain.handle(
           'Authorization': `Bearer ${MISTRAL_API_KEY}`,
         },
         body: JSON.stringify({
-          model: payload.model || 'mistral-large-latest',
+          model: payload.model || MISTRAL_MODEL,
           messages: payload.messages,
           temperature: 0.7,
           max_tokens: 4096,
@@ -400,7 +405,7 @@ ipcMain.handle(
           'Authorization': `Bearer ${MISTRAL_API_KEY}`,
         },
         body: JSON.stringify({
-          model: payload.model || 'mistral-large-latest',
+          model: payload.model || MISTRAL_MODEL,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Контекст: ${payload.context || 'prompt-db-local pipeline'}\n\nПримени Φ_total к процессу: ${payload.process}` },
