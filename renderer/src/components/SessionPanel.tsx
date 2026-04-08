@@ -20,6 +20,7 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
 }) => {
   const manager = useSessionManager();
   const [sessions, setSessions] = useState<ProducerSession[]>([]);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [selectedSession, setSelectedSession] = useState<ProducerSession | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -110,10 +111,23 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
     [manager]
   );
 
+  const totalSessions = sessions.length;
+  const totalMessages = sessions.reduce((acc, s) => acc + s.messages.length, 0);
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h2 style={styles.title}>Φ_total Sessions</h2>
+        <div style={styles.headerLeft}>
+          <h2 style={styles.title}>
+            <span style={styles.aiIcon}>🧠</span>
+            Φ_total Sessions
+            <span style={styles.aiBadge}>AI Powered</span>
+          </h2>
+          <div style={styles.headerStats}>
+            <span style={styles.stat}>{totalSessions} sessions</span>
+            <span style={styles.stat}>{totalMessages} messages</span>
+          </div>
+        </div>
         <select
           style={styles.select}
           value={selectedAccount}
@@ -483,6 +497,39 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     margin: 0,
     color: '#00d4aa',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    fontSize: '1.4em',
+  },
+  aiIcon: {
+    fontSize: '1.2em',
+  },
+  aiBadge: {
+    fontSize: '0.5em',
+    background: 'linear-gradient(135deg, #00d4aa, #00a884)',
+    color: '#1a1a2e',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  headerLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  headerStats: {
+    display: 'flex',
+    gap: '12px',
+    fontSize: '0.85em',
+    color: '#888',
+  },
+  stat: {
+    background: '#2a2a4e',
+    padding: '2px 8px',
+    borderRadius: '4px',
   },
   select: {
     padding: '8px 12px',

@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { CollapsiblePanel, usePanelGroup } from '@/components/CollapsiblePanel';
+import { SystemStatusDashboard } from '@/components/SystemStatusDashboard';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ImportPanel } from '@/components/ImportPanel';
 import { MMSSRuntimePanel } from '@/components/MMSSRuntimePanel';
@@ -6,8 +8,10 @@ import { PromptEditor } from '@/components/PromptEditor';
 import { PromptList } from '@/components/PromptList';
 import { SequencePresetsPanel } from '@/components/SequencePresetsPanel';
 import { TagKeyExplorer } from '@/components/TagKeyExplorer';
+import { SessionPanel } from '@/components/SessionPanel';
 import { usePrompts } from '@/hooks/usePrompts';
 import { usePromptStore } from '@/store/promptStore';
+import { useSessionImporter } from '@/hooks/useSessionImporter';
 import type { ElementTagBinding, ExportPreset, KeySequencePreset, TagRegistry } from '@/types/meta';
 
 const App = () => {
@@ -111,22 +115,54 @@ const App = () => {
     });
   };
 
+  // Φ_total(session:hook) — активируем обработчик сессий
+  useSessionImporter();
+
   const resolvePromptTags = (promptId: string) =>
     (tagsByPromptId.get(promptId) ?? [])
       .map((tagId) => tagRegistry.tags.find((tag) => tag.id === tagId))
       .filter((tag): tag is (typeof tagRegistry.tags)[number] => tag !== undefined);
 
+  // Φ_total(ui:collapse) — управление группой панелей
+  const { expandAll, collapseAll } = usePanelGroup([
+    'system-status',
+    'import-flow',
+    'tag-explorer',
+    'sequence-presets',
+    'prompt-editor',
+    'mmss-runtime',
+    'export-panel',
+    'ai-sessions',
+  ]);
+
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
-        <p className="eyebrow">Local Prompt Organism</p>
-          <h1>Electron prompt laboratory for clean JSON blocks, tags, and batch generation</h1>
+          <p className="eyebrow">Local Prompt Organism — Φ_total(collapsible)</p>
+          <h1>Electron prompt laboratory with AI session intelligence</h1>
         </div>
         <p className="hero-copy">
           A local-first workspace for importing strict JSON fragments, curating tags and sequences,
-          and generating clean prompt batches for producer.ai without leaking technical metadata.
+          and generating clean prompt batches. Now with Mistral AI-powered session analysis
+          and collapsible interface for focused workflow.
         </p>
+        
+        {/* Φ_total(ui:controls) — глобальные контролы панелей */}
+        <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={expandAll}
+            style={{ padding: '6px 12px', fontSize: '0.85em', background: '#2a2a4e', border: '1px solid #00d4aa', color: '#00d4aa', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            📂 Expand All
+          </button>
+          <button 
+            onClick={collapseAll}
+            style={{ padding: '6px 12px', fontSize: '0.85em', background: '#2a2a4e', border: '1px solid #00d4aa', color: '#00d4aa', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            📁 Collapse All
+          </button>
+        </div>
       </section>
 
       <section className="layout-grid">
@@ -140,51 +176,140 @@ const App = () => {
         />
 
         <div className="content-column">
-          <ImportPanel
-            wsState={wsStatus.state}
-            wsPort={wsStatus.port}
-            lastWsMessageAt={wsStatus.lastMessageAt}
-            lastWsSource={wsStatus.lastSource}
-            importLog={importLog}
-            onImportFile={handleImportFile}
-            onResetDatabase={resetDatabase}
-            onRunSyncSelfTest={handleRunSyncSelfTest}
-          />
+          {/* Φ_total(status:dashboard) — системный мониторинг */}
+          <SystemStatusDashboard />
 
-          <TagKeyExplorer
-            prompts={prompts}
-            tagRegistry={tagRegistry}
-            bindings={elementTagBindings}
-            onPersist={persistRegistryAndBindings}
-          />
+          {/* Import Flow — сворачиваемая панель */}
+          <CollapsiblePanel
+            id="import-flow"
+            title="Import Flow"
+            eyebrow="Ingress"
+            badge={wsStatus.state === 'listening' ? 'Live' : 'Down'}
+            badgeType={wsStatus.state === 'listening' ? 'success' : 'error'}
+            defaultExpanded={true}
+          >
+            <ImportPanel
+              wsState={wsStatus.state}
+              wsPort={wsStatus.port}
+              lastWsMessageAt={wsStatus.lastMessageAt}
+              lastWsSource={wsStatus.lastSource}
+              importLog={importLog}
+              onImportFile={handleImportFile}
+              onResetDatabase={resetDatabase}
+              onRunSyncSelfTest={handleRunSyncSelfTest}
+            />
+          </CollapsiblePanel>
 
-          <SequencePresetsPanel
-            prompts={prompts}
-            presets={keySequencePresets}
-            onPersist={persistSequencePresets}
-          />
+          {/* Tag Explorer */}
+          <CollapsiblePanel
+            id="tag-explorer"
+            title="Tag & Key Explorer"
+            eyebrow="Curation"
+            badge={`${tagRegistry.tags.length} tags`}
+            defaultExpanded={false}
+          >
+            <TagKeyExplorer
+              prompts={prompts}
+              tagRegistry={tagRegistry}
+              bindings={elementTagBindings}
+              onPersist={persistRegistryAndBindings}
+            />
+          </CollapsiblePanel>
 
-          <PromptEditor
-            prompt={selectedPrompt}
-            promptTags={selectedPromptTags}
-            onSave={async (draft) => {
-              await savePrompt(draft);
-            }}
-            onDelete={deletePrompt}
-          />
+          {/* Sequence Presets */}
+          <CollapsiblePanel
+            id="sequence-presets"
+            title="Sequence Presets"
+            eyebrow="Patterns"
+            badge={`${keySequencePresets.length} presets`}
+            defaultExpanded={false}
+          >
+            <SequencePresetsPanel
+              prompts={prompts}
+              presets={keySequencePresets}
+              onPersist={persistSequencePresets}
+            />
+          </CollapsiblePanel>
 
-          <MMSSRuntimePanel 
-            onImportGenerated={handleImportGenerated}
-          />
+          {/* Prompt Editor */}
+          <CollapsiblePanel
+            id="prompt-editor"
+            title="Prompt Editor"
+            eyebrow="Editor"
+            badge={selectedPrompt ? 'Active' : 'Idle'}
+            badgeType={selectedPrompt ? 'success' : 'default'}
+            defaultExpanded={!!selectedPrompt}
+          >
+            <PromptEditor
+              prompt={selectedPrompt}
+              promptTags={selectedPromptTags}
+              onSave={async (draft) => {
+                await savePrompt(draft);
+              }}
+              onDelete={deletePrompt}
+            />
+          </CollapsiblePanel>
 
-          <ExportPanel
-            prompts={prompts}
-            tagRegistry={tagRegistry}
-            bindings={elementTagBindings}
-            sequencePresets={keySequencePresets}
-            exportPresets={exportPresets}
-            onPersistPresets={persistExportPresets}
-          />
+          {/* MMSS Runtime */}
+          <CollapsiblePanel
+            id="mmss-runtime"
+            title="MMSS Runtime"
+            eyebrow="Python Engine"
+            badge="V3"
+            defaultExpanded={false}
+          >
+            <MMSSRuntimePanel 
+              onImportGenerated={handleImportGenerated}
+            />
+          </CollapsiblePanel>
+
+          {/* Export Panel */}
+          <CollapsiblePanel
+            id="export-panel"
+            title="Export Composer"
+            eyebrow="Egress"
+            badge={`${exportPresets.length} presets`}
+            defaultExpanded={false}
+          >
+            <ExportPanel
+              prompts={prompts}
+              tagRegistry={tagRegistry}
+              bindings={elementTagBindings}
+              sequencePresets={keySequencePresets}
+              exportPresets={exportPresets}
+              onPersistPresets={persistExportPresets}
+            />
+          </CollapsiblePanel>
+
+          {/* AI Sessions — панель сессий */}
+          <CollapsiblePanel
+            id="ai-sessions"
+            title="🧠 AI Session Intelligence"
+            eyebrow="Φ_total(mistral)"
+            badge="Mistral"
+            badgeType="success"
+            defaultExpanded={true}
+            headerActions={
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open('https://console.mistral.ai/', '_blank');
+                }}
+                style={{ padding: '4px 10px', fontSize: '0.75em', background: '#00d4aa', color: '#1a1a2e', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                API Console
+              </button>
+            }
+          >
+            <SessionPanel
+              onApplySuggestion={(suggestion) => {
+                console.log('Φ_total(suggestion:applied)', suggestion);
+              }}
+              onExportSession={(session) => {
+                console.log('Φ_total(session:exported)', session);
+              }}
+            />
+          </CollapsiblePanel>
         </div>
       </section>
     </main>

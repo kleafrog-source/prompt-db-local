@@ -42,6 +42,17 @@ export const ImportPanel = ({
       generation and prompt usage tracking.
     </p>
 
+    <div style={{ background: '#1a1a2e', padding: '12px', borderRadius: '6px', marginBottom: '12px', borderLeft: '3px solid #00d4aa' }}>
+      <div style={{ color: '#00d4aa', fontSize: '0.9em', marginBottom: '6px' }}>
+        <span style={{ fontSize: '1.2em' }}>🧠 </span>
+        <strong>AI Integration Active</strong>
+      </div>
+      <div style={{ fontSize: '0.8em', color: '#888' }}>
+        WebSocket imports with sessionContext are automatically analyzed by Mistral AI. 
+        Each Chrome account gets separate session tracking with intelligent autobatch suggestions.
+      </div>
+    </div>
+
     <div className="export-stats">
       <span>Last websocket source: {lastWsSource}</span>
       <span>
