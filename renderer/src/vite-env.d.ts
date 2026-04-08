@@ -1,10 +1,19 @@
 /// <reference types="vite/client" />
 
+// Φ_total(types) — типы эволюционируют с системой
 type ImportEnvelope = {
   id: string;
   rawJson: string;
   source: string;
   receivedAt: string;
+  sessionContext?: {
+    accountId: string;
+    accountName?: string;
+    sessionName?: string;
+    messageIndex?: number;
+    totalMessages?: number;
+    previousContext?: string;
+  };
 };
 
 type WsStatus = {
@@ -109,5 +118,31 @@ interface Window {
     }) => Promise<{ directoryPath: string; count: number } | null>;
     onImportedJson: (callback: (payload: ImportEnvelope) => void) => () => void;
     onWsStatus: (callback: (payload: WsStatus) => void) => () => void;
+    mmssRunTask: (payload: { script: string; args: string[] }) => Promise<{ ok: boolean; output: string; error?: string; data?: any }>;
+    // Φ_total(mistral) — Mistral API как координирующий слой
+    mistralChat: (payload: { messages: Array<{ role: string; content: string }>; model?: string }) => Promise<{
+      ok: boolean;
+      data?: {
+        choices: Array<{
+          message: { role: string; content: string };
+          finish_reason: string;
+          index: number;
+        }>;
+        usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+      };
+      error?: string;
+    }>;
+    mistralApplyPhi: (payload: { process: string; context?: string; model?: string }) => Promise<{
+      ok: boolean;
+      data?: {
+        choices: Array<{
+          message: { role: string; content: string };
+          finish_reason: string;
+          index: number;
+        }>;
+        usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+      };
+      error?: string;
+    }>;
   };
 }

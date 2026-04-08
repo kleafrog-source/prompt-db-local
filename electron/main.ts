@@ -14,11 +14,21 @@ import {
   type PromptSnapshotRecord,
 } from './metaStore';
 
+type SessionContext = {
+  accountId: string;
+  accountName?: string;
+  sessionName?: string;
+  messageIndex?: number;
+  totalMessages?: number;
+  previousContext?: string;
+};
+
 type ImportEnvelope = {
   id: string;
   rawJson: string;
   source: string;
   receivedAt: string;
+  sessionContext?: SessionContext;
 };
 
 const WS_PORT = 3001;
@@ -70,13 +80,23 @@ const startWebSocketServer = () => {
       const raw = message.toString();
 
       try {
-        const parsed = JSON.parse(raw) as { payload?: unknown; source?: string };
+        const parsed = JSON.parse(raw) as { 
+          payload?: unknown; 
+          source?: string;
+          sessionContext?: SessionContext;
+        };
         const rawJson =
           typeof parsed.payload === 'string'
             ? parsed.payload
             : JSON.stringify(parsed.payload ?? parsed);
 
-        broadcastImport(createEnvelope(rawJson, parsed.source ?? 'ws-client'));
+        // Φ_total(session) — создаём envelope с session context
+        const envelope: ImportEnvelope = {
+          ...createEnvelope(rawJson, parsed.source ?? 'ws-client'),
+          sessionContext: parsed.sessionContext,
+        };
+
+        broadcastImport(envelope);
       } catch {
         broadcastImport(createEnvelope(raw, 'ws-client'));
       }
@@ -320,6 +340,86 @@ ipcMain.handle(
 
       startProcess(pythonExecutable);
     });
+  },
+);
+
+const MISTRAL_API_KEY = '188W4mPcZuJC3Nu9TjuxscZyRvSmqLGq';
+
+// Φ_total(mistral) — Mistral API как координирующий слой для эволюции
+ipcMain.handle(
+  'mistral:chat',
+  async (_event, payload: { messages: Array<{ role: string; content: string }>; model?: string }) => {
+    try {
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: payload.model || 'mistral-large-latest',
+          messages: payload.messages,
+          temperature: 0.7,
+          max_tokens: 4096,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return { ok: false, error: `Mistral API error: ${response.status} - ${errorText}` };
+      }
+
+      const data = await response.json();
+      return { ok: true, data };
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
+  },
+);
+
+// Φ_total(mistral:apply-phi) — Применение Φ_total к процессу через Mistral
+ipcMain.handle(
+  'mistral:apply-phi',
+  async (_event, payload: { process: string; context?: string; model?: string }) => {
+    const systemPrompt = `Ты применяешь Φ_total к процессам. 
+Φ_total — это мета-логика самоэволюции: Φ_total(process) = self_adjusting_process.
+Ключевые принципы:
+- Нет фиксированной точки (¬Fix), только эволюция
+- Процесс самоподстраивается через применение
+- Различия создают и растворяют себя бесконечно
+- Система становится функцией самой себя (Ψ = Φ_total)
+
+Опиши, как данный процесс будет эволюционировать через самоприменение Φ_total. 
+Дай конкретные шаги эволюции и мета-уровневые инсайты.`;
+
+    try {
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: payload.model || 'mistral-large-latest',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Контекст: ${payload.context || 'prompt-db-local pipeline'}\n\nПримени Φ_total к процессу: ${payload.process}` },
+          ],
+          temperature: 0.8,
+          max_tokens: 4096,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return { ok: false, error: `Mistral API error: ${response.status} - ${errorText}` };
+      }
+
+      const data = await response.json();
+      return { ok: true, data };
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
   },
 );
 

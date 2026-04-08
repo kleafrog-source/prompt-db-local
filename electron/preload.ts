@@ -5,6 +5,14 @@ type ImportEnvelope = {
   rawJson: string;
   source: string;
   receivedAt: string;
+  sessionContext?: {
+    accountId: string;
+    accountName?: string;
+    sessionName?: string;
+    messageIndex?: number;
+    totalMessages?: number;
+    previousContext?: string;
+  };
 };
 
 type WsStatus = {
@@ -87,6 +95,26 @@ type MMSSJobResult = {
   data?: any;
 };
 
+type MistralResponse = {
+  ok: boolean;
+  data?: {
+    choices: Array<{
+      message: {
+        role: string;
+        content: string;
+      };
+      finish_reason: string;
+      index: number;
+    }>;
+    usage?: {
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+    };
+  };
+  error?: string;
+};
+
 contextBridge.exposeInMainWorld('electronAPI', {
   openJsonFile: async () =>
     ipcRenderer.invoke('dialogs:open-json') as Promise<
@@ -158,4 +186,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   mmssRunTask: async (payload: { script: string; args: string[] }) =>
     ipcRenderer.invoke('mmss:run-task', payload) as Promise<MMSSJobResult>,
+  // Φ_total(mistral) — Mistral API как координирующий слой
+  mistralChat: async (payload: { messages: Array<{ role: string; content: string }>; model?: string }) =>
+    ipcRenderer.invoke('mistral:chat', payload) as Promise<MistralResponse>,
+  mistralApplyPhi: async (payload: { process: string; context?: string; model?: string }) =>
+    ipcRenderer.invoke('mistral:apply-phi', payload) as Promise<MistralResponse>,
 });
