@@ -20,6 +20,7 @@
     "start": "npm run build && node scripts/launch-electron.cjs ."
   },
   "dependencies": {
+    "dotenv": "^16.4.7",
     "electron": "^36.0.0",
     "ws": "^8.18.1"
   },

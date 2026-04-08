@@ -1,4 +1,5 @@
 // @ts-check
+// Φ_total(content) — Content script с поддержкой сессий
 
 /** @type {{ promptId: string; text: string; tagColor?: string; tagNumber?: number } | null} */
 let lastInsertedPrompt = null;
@@ -7,11 +8,96 @@ const usedPromptIds = new Set();
 let sendObserversInstalled = false;
 let activeSendToken = 0;
 
+// Φ_total(session:cache) — кэш текущей сессии
+/** @type {string | null} */
+let cachedSessionName = null;
+/** @type {number} */
+let sessionCacheTimestamp = 0;
+const SESSION_CACHE_TTL = 30000; // 30 секунд
+
 const BADGE_ATTRIBUTE = 'data-prompt-db-badge';
 const MESSAGE_ATTRIBUTE = 'data-prompt-db-message';
 const MESSAGE_SELECTOR = '.chat-history-part.user-part';
 
 const normalizeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+
+// Φ_total(session:extract) — извлечение имени сессии из Producer AI
+function extractSessionName() {
+  // Проверяем кэш
+  const now = Date.now();
+  if (cachedSessionName && (now - sessionCacheTimestamp) < SESSION_CACHE_TTL) {
+    return cachedSessionName;
+  }
+  
+  // Пробуем найти имя сессии в разных местах страницы
+  // Вариант 1: Заголовок страницы (title)
+  const pageTitle = document.title;
+  if (pageTitle && pageTitle !== 'Producer' && pageTitle !== 'producer.ai') {
+    cachedSessionName = pageTitle.slice(0, 100);
+    sessionCacheTimestamp = now;
+    return cachedSessionName;
+  }
+  
+  // Вариант 2: Элементы с названием сессии (часто это h1 или специальный элемент)
+  const sessionTitleSelectors = [
+    'h1.session-title',
+    '[data-testid="session-title"]',
+    '.session-name',
+    '.chat-title',
+    '[class*="title"]',
+    'header h1',
+    '.sidebar .active .title',
+  ];
+  
+  for (const selector of sessionTitleSelectors) {
+    const element = document.querySelector(selector);
+    if (element && element.textContent) {
+      const text = element.textContent.trim();
+      if (text && text.length > 0 && text !== 'Producer') {
+        cachedSessionName = text.slice(0, 100);
+        sessionCacheTimestamp = now;
+        return cachedSessionName;
+      }
+    }
+  }
+  
+  // Вариант 3: Извлекаем из URL (если есть ID сессии)
+  const urlMatch = window.location.pathname.match(/\/session\/([^\/]+)/);
+  if (urlMatch) {
+    cachedSessionName = `Session ${urlMatch[1].slice(0, 20)}`;
+    sessionCacheTimestamp = now;
+    return cachedSessionName;
+  }
+  
+  // Вариант 4: Первое сообщение пользователя как название сессии
+  const firstUserMessage = document.querySelector('.chat-history-part.user-part:first-of-type');
+  if (firstUserMessage) {
+    const text = firstUserMessage.textContent?.trim().slice(0, 50);
+    if (text) {
+      cachedSessionName = text;
+      sessionCacheTimestamp = now;
+      return cachedSessionName;
+    }
+  }
+  
+  // Fallback: timestamp-based name
+  cachedSessionName = `Session ${new Date().toLocaleString()}`;
+  sessionCacheTimestamp = now;
+  return cachedSessionName;
+}
+
+// Отправляем имя сессии в background script
+function reportSessionName() {
+  const sessionName = extractSessionName();
+  chrome.runtime.sendMessage({
+    type: 'SET_SESSION_NAME',
+    payload: {
+      sessionName,
+      extractedFromPage: true,
+    },
+  });
+  return sessionName;
+}
 
 const findLastTextarea = () => {
   const textareas = [...document.querySelectorAll('textarea')].filter((node) => {
@@ -164,15 +250,22 @@ const waitForSentMessageHighlight = (payload, token) => {
   });
 };
 
-const notifyPromptEvent = (type, payload) =>
+// Φ_total(session:notify) — уведомление с именем сессии
+const notifyPromptEvent = (type, payload) => {
+  const sessionName = extractSessionName();
+  
   chrome.runtime.sendMessage({
     type,
     payload: {
       promptId: payload.promptId,
       usedAt: Date.now(),
-      url: location.href,
+      url: window.location.href,
+      tabId: -1,
+      windowId: -1,
+      sessionName, // Φ_total(session:context) — добавляем имя сессии
     },
   });
+};
 
 const triggerSentMessageFlow = (reason) => {
   if (!lastInsertedPrompt) {
@@ -300,6 +393,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
+// Φ_total(session:init) — отправляем имя сессии при загрузке
+reportSessionName();
+
 chrome.runtime.sendMessage(
   {
     type: 'GET_PROMPTS',
@@ -319,3 +415,15 @@ chrome.runtime.sendMessage(
     });
   },
 );
+
+// Обновляем имя сессии при изменении title
+const titleObserver = new MutationObserver(() => {
+  const newSessionName = extractSessionName();
+  if (newSessionName !== cachedSessionName) {
+    reportSessionName();
+  }
+});
+titleObserver.observe(document.querySelector('title') || document.head, {
+  childList: true,
+  subtree: true,
+});
