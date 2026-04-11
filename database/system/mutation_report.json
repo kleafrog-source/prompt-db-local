@@ -2,103 +2,103 @@
   "generated_count": 20,
   "mutations": [
     {
-      "id": "mut_68_e87b",
-      "parent": "68",
+      "id": "mut_meta_149_a946",
+      "parent": "meta_149",
       "type": "param_shift"
     },
     {
-      "id": "mut_meta_235_a918",
-      "parent": "meta_235",
-      "type": "phase_shift"
-    },
-    {
-      "id": "mut_111_8ae5",
-      "parent": "111",
+      "id": "mut_32_853d",
+      "parent": "32",
       "type": "detail_amplification"
     },
     {
-      "id": "mut_10_fba8",
-      "parent": "10",
-      "type": "detail_amplification"
+      "id": "mut_meta_141_825f",
+      "parent": "meta_141",
+      "type": "param_shift"
     },
     {
-      "id": "mut_meta_235_3359",
-      "parent": "meta_235",
+      "id": "mut_50_46a8",
+      "parent": "50",
       "type": "phase_shift"
     },
     {
-      "id": "mut_meta_250_b7be",
-      "parent": "meta_250",
-      "type": "param_shift"
-    },
-    {
-      "id": "mut_meta_283_5c5e",
-      "parent": "meta_283",
-      "type": "param_shift"
-    },
-    {
-      "id": "mut_56_6f0f",
-      "parent": "56",
-      "type": "param_shift"
-    },
-    {
-      "id": "mut_meta_177_31ed",
-      "parent": "meta_177",
-      "type": "phase_shift"
-    },
-    {
-      "id": "mut_meta_299_dff4",
-      "parent": "meta_299",
+      "id": "mut_meta_144_f694",
+      "parent": "meta_144",
       "type": "detail_amplification"
     },
     {
-      "id": "mut_29_1a35",
-      "parent": "29",
-      "type": "param_shift"
-    },
-    {
-      "id": "mut_meta_135_df87",
-      "parent": "meta_135",
+      "id": "mut_meta_122_8b56",
+      "parent": "meta_122",
       "type": "detail_amplification"
     },
     {
-      "id": "mut_35_15d4",
-      "parent": "35",
+      "id": "mut_meta_133_dfe1",
+      "parent": "meta_133",
       "type": "phase_shift"
     },
     {
-      "id": "mut_meta_234_47e1",
-      "parent": "meta_234",
+      "id": "mut_meta_237_3a68",
+      "parent": "meta_237",
       "type": "param_shift"
     },
     {
-      "id": "mut_meta_142_7186",
-      "parent": "meta_142",
+      "id": "mut_meta_294_a2f8",
+      "parent": "meta_294",
+      "type": "phase_shift"
+    },
+    {
+      "id": "mut_57_7c39",
+      "parent": "57",
       "type": "param_shift"
     },
     {
-      "id": "mut_meta_193_1f66",
-      "parent": "meta_193",
+      "id": "mut_meta_161_ce66",
+      "parent": "meta_161",
       "type": "detail_amplification"
     },
     {
-      "id": "mut_78_8c24",
-      "parent": "78",
-      "type": "phase_shift"
-    },
-    {
-      "id": "mut_18_ee96",
-      "parent": "18",
+      "id": "mut_meta_131_dd2f",
+      "parent": "meta_131",
       "type": "detail_amplification"
     },
     {
-      "id": "mut_16_6929",
-      "parent": "16",
+      "id": "mut_94_c712",
+      "parent": "94",
+      "type": "param_shift"
+    },
+    {
+      "id": "mut_meta_197_da38",
+      "parent": "meta_197",
+      "type": "param_shift"
+    },
+    {
+      "id": "mut_meta_271_3bb5",
+      "parent": "meta_271",
+      "type": "detail_amplification"
+    },
+    {
+      "id": "mut_meta_293_b366",
+      "parent": "meta_293",
       "type": "phase_shift"
     },
     {
-      "id": "mut_65_8317",
-      "parent": "65",
+      "id": "mut_101_782b",
+      "parent": "101",
+      "type": "phase_shift"
+    },
+    {
+      "id": "mut_50_192f",
+      "parent": "50",
+      "type": "phase_shift"
+    },
+    {
+      "id": "mut_55_77dd",
+      "parent": "55",
+      "type": "detail_amplification"
+    },
+    {
+      "id": "mut_24_a38d",
+      "parent": "24",
       "type": "param_shift"
     }
   ]
