@@ -1,8 +1,6 @@
 // Φ_total(session) — менеджер состояний Producer AI сессий
 // Хранит историю по аккаунтам Chrome, анализирует через Mistral, предлагает следующие шаги
 
-import type { DBElement } from '@/types/meta';
-
 export interface SessionMessage {
   id: string;
   content: string;

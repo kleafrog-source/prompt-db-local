@@ -11,29 +11,14 @@ import {
   loadMetaState,
   saveMetaState,
   savePromptSnapshot,
-  type PromptDbMetaState,
-  type PromptSnapshotRecord,
 } from './metaStore';
+import type { ImportEnvelope, SessionContext } from '../shared/electron';
+import type { PromptDbMetaState } from '../shared/meta';
+import type { PromptSnapshotRecord } from '../shared/prompt';
+import { MistralCoordinator } from './services/mistralCoordinator';
 
 // Load environment variables from .env file
 dotenv.config();
-
-type SessionContext = {
-  accountId: string;
-  accountName?: string;
-  sessionName?: string;
-  messageIndex?: number;
-  totalMessages?: number;
-  previousContext?: string;
-};
-
-type ImportEnvelope = {
-  id: string;
-  rawJson: string;
-  source: string;
-  receivedAt: string;
-  sessionContext?: SessionContext;
-};
 
 const WS_PORT = 3001;
 const pendingImports: ImportEnvelope[] = [];
@@ -349,43 +334,26 @@ ipcMain.handle(
 
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || '';
 const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
+const mistralCoordinator = new MistralCoordinator({
+  apiKey: MISTRAL_API_KEY,
+  defaultModel: MISTRAL_MODEL,
+});
 
 // Φ_total(mistral) — Mistral API как координирующий слой для эволюции
 ipcMain.handle(
   'mistral:chat',
-  async (_event, payload: { messages: Array<{ role: string; content: string }>; model?: string }) => {
-    try {
-      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${MISTRAL_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: payload.model || MISTRAL_MODEL,
-          messages: payload.messages,
-          temperature: 0.7,
-          max_tokens: 4096,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return { ok: false, error: `Mistral API error: ${response.status} - ${errorText}` };
-      }
-
-      const data = await response.json();
-      return { ok: true, data };
-    } catch (error) {
-      return { ok: false, error: String(error) };
-    }
-  },
+  async (_event, payload: { messages: Array<{ role: string; content: string }>; model?: string }) =>
+    mistralCoordinator.rawChat(
+      payload.messages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+      payload.model,
+    ),
 );
 
 // Φ_total(mistral:apply-phi) — Применение Φ_total к процессу через Mistral
 ipcMain.handle(
   'mistral:apply-phi',
   async (_event, payload: { process: string; context?: string; model?: string }) => {
+    return mistralCoordinator.applyPhi(payload.process, payload.context, payload.model);
     const systemPrompt = `Ты применяешь Φ_total к процессам. 
 Φ_total — это мета-логика самоэволюции: Φ_total(process) = self_adjusting_process.
 Ключевые принципы:
@@ -426,6 +394,20 @@ ipcMain.handle(
       return { ok: false, error: String(error) };
     }
   },
+);
+
+ipcMain.handle('mistral:get-status', async () => mistralCoordinator.getStatus());
+ipcMain.handle('mistral:plan-generation', async (_event, payload) =>
+  mistralCoordinator.planGeneration(payload),
+);
+ipcMain.handle('mistral:generate-rules', async (_event, payload) =>
+  mistralCoordinator.generateRules(payload),
+);
+ipcMain.handle('mistral:critique-output', async (_event, payload) =>
+  mistralCoordinator.critiqueOutput(payload),
+);
+ipcMain.handle('mistral:summarize-session', async (_event, payload) =>
+  mistralCoordinator.summarizeSession(payload),
 );
 
 app.whenReady().then(async () => {

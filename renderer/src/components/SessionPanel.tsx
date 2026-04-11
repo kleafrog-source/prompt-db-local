@@ -8,7 +8,7 @@ import {
   type ProducerSession,
   type AutobatchConfig,
 } from '@/services/SessionStateManager';
-import { applyPhiTotal } from '@/services/MistralService';
+import { applyPhiTotal, summarizeSessionWithMistral } from '@/services/MistralService';
 import { MistralChat } from './MistralChat';
 import { AccountManager } from './AccountManager';
 import { ManualSessionInput } from './ManualSessionInput';
@@ -69,14 +69,39 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
         return;
       }
 
+      const structuredResponse = await summarizeSessionWithMistral({
+        sessionName: session.name,
+        accountId: session.accountId,
+        accountName: session.accountName,
+        totalMessages: context.totalMessages,
+        recentContext: context.recentContext,
+        previousSummary: session.summary,
+        model: 'mistral-large-latest',
+      });
+
+      const structuredSummary =
+        structuredResponse.data?.summary ?? `Session "${session.name}" summary is unavailable.`;
+      const structuredSuggestions =
+        structuredResponse.data?.suggestedNextSteps.length
+          ? structuredResponse.data.suggestedNextSteps
+          : [structuredResponse.error ?? 'Review recent context and retry analysis.'];
+
+      manager.updateSessionAnalysis(session.id, structuredSummary, structuredSuggestions);
+      setAnalysisResult({
+        summary: structuredSummary,
+        suggestions: structuredSuggestions,
+      });
+      setIsAnalyzing(false);
+      return;
+
       const response = await applyPhiTotal(
         'producer-session-analysis',
-        `Session: ${session.name}\nMessages: ${context.totalMessages}\nRecent:\n${context.recentContext}`,
+        `Session: ${session.name}\nMessages: ${context?.totalMessages ?? 0}\nRecent:\n${context?.recentContext ?? ''}`,
         'mistral-large-latest'
       );
 
       if (response.ok && response.data) {
-        const content = response.data.choices[0]?.message?.content || '';
+        const content = response.data?.choices[0]?.message?.content || '';
         
         // Парсим ответ (предполагаем структуру с Summary и Next Steps)
         const lines = content.split('\n');
@@ -102,10 +127,10 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
         setAnalysisResult({
           summary,
           suggestions,
-          tokens: response.data.usage ? {
-            prompt: response.data.usage.prompt_tokens,
-            completion: response.data.usage.completion_tokens,
-            total: response.data.usage.total_tokens,
+          tokens: response.data?.usage ? {
+            prompt: response.data?.usage?.prompt_tokens ?? 0,
+            completion: response.data?.usage?.completion_tokens ?? 0,
+            total: response.data?.usage?.total_tokens ?? 0,
           } : undefined,
         });
       }

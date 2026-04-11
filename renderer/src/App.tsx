@@ -3,6 +3,7 @@ import { CollapsiblePanel, usePanelGroup } from '@/components/CollapsiblePanel';
 import { SystemStatusDashboard } from '@/components/SystemStatusDashboard';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ImportPanel } from '@/components/ImportPanel';
+import { MistralCoordinationPanel } from '@/components/MistralCoordinationPanel';
 import { MMSSRuntimePanel } from '@/components/MMSSRuntimePanel';
 import { PromptEditor } from '@/components/PromptEditor';
 import { PromptList } from '@/components/PromptList';
@@ -132,6 +133,7 @@ const App = () => {
     'prompt-editor',
     'mmss-runtime',
     'export-panel',
+    'mistral-history',
     'ai-sessions',
   ]);
 
@@ -177,7 +179,16 @@ const App = () => {
 
         <div className="content-column">
           {/* Φ_total(status:dashboard) — системный мониторинг */}
-          <SystemStatusDashboard />
+          <CollapsiblePanel
+            id="system-status"
+            title="System Status"
+            eyebrow="Telemetry"
+            badge={wsStatus.state === 'listening' ? 'Healthy' : 'Check'}
+            badgeType={wsStatus.state === 'listening' ? 'success' : 'warning'}
+            defaultExpanded={false}
+          >
+            <SystemStatusDashboard />
+          </CollapsiblePanel>
 
           {/* Import Flow — сворачиваемая панель */}
           <CollapsiblePanel
@@ -186,7 +197,7 @@ const App = () => {
             eyebrow="Ingress"
             badge={wsStatus.state === 'listening' ? 'Live' : 'Down'}
             badgeType={wsStatus.state === 'listening' ? 'success' : 'error'}
-            defaultExpanded={true}
+            defaultExpanded={false}
           >
             <ImportPanel
               wsState={wsStatus.state}
@@ -238,7 +249,7 @@ const App = () => {
             eyebrow="Editor"
             badge={selectedPrompt ? 'Active' : 'Idle'}
             badgeType={selectedPrompt ? 'success' : 'default'}
-            defaultExpanded={!!selectedPrompt}
+            defaultExpanded={false}
           >
             <PromptEditor
               prompt={selectedPrompt}
@@ -269,7 +280,7 @@ const App = () => {
             title="Export Composer"
             eyebrow="Egress"
             badge={`${exportPresets.length} presets`}
-            defaultExpanded={false}
+            defaultExpanded={true}
           >
             <ExportPanel
               prompts={prompts}
@@ -279,6 +290,16 @@ const App = () => {
               exportPresets={exportPresets}
               onPersistPresets={persistExportPresets}
             />
+          </CollapsiblePanel>
+
+          <CollapsiblePanel
+            id="mistral-history"
+            title="Mistral History"
+            eyebrow="Memory"
+            badge="Planner Log"
+            defaultExpanded={false}
+          >
+            <MistralCoordinationPanel />
           </CollapsiblePanel>
 
           {/* AI Sessions — панель сессий */}

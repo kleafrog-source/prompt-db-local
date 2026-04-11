@@ -1,84 +1,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
-
-type Tag = {
-  id: string;
-  label: string;
-  color: string;
-  type: 'key' | 'value' | 'semantic';
-};
-
-type TagRegistry = {
-  tags: Tag[];
-};
-
-type ElementTagBinding = {
-  elementId: string;
-  tags: string[];
-};
-
-type KeySequence = {
-  id: string;
-  pathChain: string[];
-  usageCount: number;
-};
-
-type KeySequencePreset = {
-  id: string;
-  name: string;
-  description?: string;
-  sequences: KeySequence[];
-  generationRules?: {
-    mode: 'random' | 'weighted' | 'sequential';
-    maxBlocks?: number;
-    allowRepetition?: boolean;
-  };
-};
-
-type ExportPreset = {
-  id: string;
-  label: string;
-  description?: string;
-  filters?: {
-    includeTags?: string[];
-    excludeTags?: string[];
-    includeKeys?: string[];
-    excludeKeys?: string[];
-  };
-  composition?: {
-    mode: 'as-is' | 'random-mix' | 'sequence-based';
-    pattern?: string;
-  };
-  slicing?: {
-    useKeySequences?: string[];
-    maxBlocksPerElement?: number;
-  };
-  output?: {
-    fileNamePattern: string;
-    format: 'json';
-  };
-};
-
-export type PromptSnapshotRecord = {
-  id: string;
-  name: string;
-  text: string;
-  json_data: Record<string, unknown>;
-  fingerprint: string;
-  variables: string[];
-  keywords: string[];
-  created_at: string;
-  updated_at: string;
-  source?: string;
-  serviceMeta?: {
-    fragmentIndex?: number;
-    items?: Array<{
-      id: string;
-      sourceElementIds: string[];
-    }>;
-  };
-};
+import {
+  createEmptyMetaState,
+  type PromptDbMetaState,
+} from '../shared/meta';
+import type { PromptSnapshotRecord } from '../shared/prompt';
 
 export type PromptUsageLogEntry = {
   promptId: string;
@@ -90,27 +17,12 @@ export type PromptUsageLogEntry = {
   source: 'prompt_used' | 'prompt_sent_message';
 };
 
-export type PromptDbMetaState = {
-  tagRegistry: TagRegistry;
-  elementTagBindings: ElementTagBinding[];
-  keySequencePresets: KeySequencePreset[];
-  exportPresets: ExportPreset[];
-};
-
-const createEmptyMetaState = (): PromptDbMetaState => ({
-  tagRegistry: {
-    tags: [],
-  },
-  elementTagBindings: [],
-  keySequencePresets: [],
-  exportPresets: [],
-});
-
 const META_FILE_NAMES = {
   tagRegistry: 'tag-registry.json',
   elementTagBindings: 'element-tag-bindings.json',
   keySequencePresets: 'key-sequence-presets.json',
   exportPresets: 'export-presets.json',
+  mistralCoordinationHistory: 'mistral-coordination-history.json',
   promptSnapshot: 'prompts-snapshot.json',
   promptUsageLog: 'prompt-usage-log.json',
 } as const;
@@ -140,11 +52,15 @@ export const loadMetaState = async (): Promise<PromptDbMetaState> => {
   const metaDir = await ensureMetaDirectory();
   const empty = createEmptyMetaState();
 
-  const [tagRegistry, elementTagBindings, keySequencePresets, exportPresets] = await Promise.all([
+  const [tagRegistry, elementTagBindings, keySequencePresets, exportPresets, mistralCoordinationHistory] = await Promise.all([
     readJsonFile(path.join(metaDir, META_FILE_NAMES.tagRegistry), empty.tagRegistry),
     readJsonFile(path.join(metaDir, META_FILE_NAMES.elementTagBindings), empty.elementTagBindings),
     readJsonFile(path.join(metaDir, META_FILE_NAMES.keySequencePresets), empty.keySequencePresets),
     readJsonFile(path.join(metaDir, META_FILE_NAMES.exportPresets), empty.exportPresets),
+    readJsonFile(
+      path.join(metaDir, META_FILE_NAMES.mistralCoordinationHistory),
+      empty.mistralCoordinationHistory,
+    ),
   ]);
 
   return {
@@ -152,6 +68,7 @@ export const loadMetaState = async (): Promise<PromptDbMetaState> => {
     elementTagBindings,
     keySequencePresets,
     exportPresets,
+    mistralCoordinationHistory,
   };
 };
 
@@ -163,6 +80,10 @@ export const saveMetaState = async (state: PromptDbMetaState) => {
     writeJsonFile(path.join(metaDir, META_FILE_NAMES.elementTagBindings), state.elementTagBindings),
     writeJsonFile(path.join(metaDir, META_FILE_NAMES.keySequencePresets), state.keySequencePresets),
     writeJsonFile(path.join(metaDir, META_FILE_NAMES.exportPresets), state.exportPresets),
+    writeJsonFile(
+      path.join(metaDir, META_FILE_NAMES.mistralCoordinationHistory),
+      state.mistralCoordinationHistory,
+    ),
   ]);
 
   return {

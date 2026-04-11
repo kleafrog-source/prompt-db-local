@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { sessionManager } from '@/services/SessionStateManager';
+import { getMistralStatus } from '@/services/MistralService';
 import { CollapsiblePanel } from './CollapsiblePanel';
 
 interface SystemStatus {
@@ -66,10 +67,19 @@ export const SystemStatusDashboard: React.FC = () => {
     const sessions = sessionManager.getAllSessions();
     const accounts = [...new Set(sessions.map(s => s.accountId))];
     const totalMessages = sessions.reduce((acc, s) => acc + s.messages.length, 0);
+    let mistralStatus = {
+      available: false,
+      configured: false,
+      defaultModel: 'mistral-large-latest',
+    };
+
+    try {
+      mistralStatus = await getMistralStatus();
+    } catch {
+      addLog('Failed to get Mistral status', 'error');
+    }
 
     // Проверяем Mistral API
-    const apiKey = '188W4mPcZuJC3Nu9TjuxscZyRvSmqLGq'; // Известный ключ
-    
     setStatus({
       wsConnected: wsStatus.state === 'listening',
       wsPort: wsStatus.port,
@@ -79,9 +89,9 @@ export const SystemStatusDashboard: React.FC = () => {
       activeAccounts: accounts,
       extensionConnected: sessions.length > 0 && Date.now() - (typeof sessions[0]?.updatedAt === 'string' ? new Date(sessions[0].updatedAt).getTime() : sessions[0]?.updatedAt || 0) < 60000,
       lastExtensionPing: typeof sessions[0]?.updatedAt === 'string' ? new Date(sessions[0].updatedAt).getTime() : sessions[0]?.updatedAt || 0,
-      mistralAvailable: true, // Предполагаем доступность
-      lastApiCall: 0,
-      apiKeyConfigured: !!apiKey,
+      mistralAvailable: mistralStatus.available,
+      lastApiCall: Date.now(),
+      apiKeyConfigured: mistralStatus.configured,
     });
 
     addLog(`Status refreshed: ${sessions.length} sessions, ${accounts.length} accounts`, 'info');

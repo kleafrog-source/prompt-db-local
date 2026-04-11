@@ -3,7 +3,8 @@
 
 import { useEffect, useCallback } from 'react';
 import { sessionManager } from '@/services/SessionStateManager';
-import { applyPhiTotal } from '@/services/MistralService';
+import { applyPhiTotal, summarizeSessionWithMistral } from '@/services/MistralService';
+import type { ImportEnvelope } from '../../../shared/electron';
 
 export function useSessionImporter() {
   // Обработка входящего импорта с sessionContext
@@ -64,14 +65,36 @@ export function useSessionImporter() {
         const context = sessionManager.getSessionContext(session.id);
         if (!context) return;
 
+        const structuredResponse = await summarizeSessionWithMistral({
+          sessionName: session.name,
+          accountId: session.accountId,
+          accountName: session.accountName,
+          totalMessages: context.totalMessages,
+          recentContext: context.recentContext,
+          previousSummary: session.summary,
+          customPrompt: config.mistralPrompt,
+          model: 'mistral-large-latest',
+        });
+
+        const structuredSummary =
+          structuredResponse.data?.summary ?? `Session "${session.name}" summary is unavailable.`;
+        const structuredSuggestions =
+          structuredResponse.data?.suggestedNextSteps.slice(0, config.maxSuggestions) ??
+          [structuredResponse.error ?? 'Review recent context and retry analysis.'];
+
+        sessionManager.updateSessionAnalysis(session.id, structuredSummary, structuredSuggestions);
+
+        console.log(`О¦_total(session:analyzed) вЂ” ${structuredSuggestions.length} suggestions`);
+        return;
+
         const response = await applyPhiTotal(
           config.patternName,
-          `${context.recentContext}\n\n${config.mistralPrompt}`,
+          `${context?.recentContext ?? ''}\n\n${config.mistralPrompt}`,
           'mistral-large-latest'
         );
 
         if (response.ok && response.data) {
-          const content = response.data.choices[0]?.message?.content || '';
+          const content = response.data?.choices[0]?.message?.content || '';
           const suggestions = content
             .split('\n')
             .filter((line) => line.trim().startsWith('-'))

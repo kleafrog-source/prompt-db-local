@@ -54,14 +54,6 @@ export const CollapsiblePanel: React.FC<CollapsiblePanelProps> = ({
     setTimeout(() => setIsAnimating(false), 300);
   }, [isExpanded, id, persistState]);
 
-  const expand = useCallback(() => {
-    if (!isExpanded) toggle();
-  }, [isExpanded, toggle]);
-
-  const collapse = useCallback(() => {
-    if (isExpanded) toggle();
-  }, [isExpanded, toggle]);
-
   const badgeStyles = {
     default: { background: '#2a2a4e', color: '#00d4aa' },
     success: { background: '#00d4aa', color: '#1a1a2e' },
@@ -138,7 +130,7 @@ export const CollapsiblePanel: React.FC<CollapsiblePanelProps> = ({
         className="panel-content"
         style={{
           maxHeight: isExpanded ? '2000px' : '0',
-          overflow: 'hidden',
+          overflow: isExpanded ? 'auto' : 'hidden',
           transition: 'max-height 0.3s ease, opacity 0.3s ease',
           opacity: isExpanded ? 1 : 0,
         }}

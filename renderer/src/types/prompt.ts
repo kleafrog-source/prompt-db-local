@@ -1,29 +1,13 @@
-export type PromptSourceItem = {
-  id: string;
-  sourceElementIds: string[];
-};
+import type { PromptRecord as SharedPromptRecord } from '../../../shared/prompt';
 
-export type PromptServiceMeta = {
-  fragmentIndex?: number;
-  items?: PromptSourceItem[];
-};
-
-export type PromptRecord = {
-  id: string;
-  name: string;
-  text: string;
-  json_data: Record<string, unknown>;
-  fingerprint: string;
-  variables: string[];
-  keywords: string[];
-  created_at: string;
-  updated_at: string;
-  source?: string;
-  serviceMeta?: PromptServiceMeta;
-};
+export type {
+  PromptRecord,
+  PromptServiceMeta,
+  PromptSourceItem,
+} from '../../../shared/prompt';
 
 export type PromptDraft = Omit<
-  PromptRecord,
+  SharedPromptRecord,
   'id' | 'created_at' | 'updated_at' | 'fingerprint' | 'text'
 > & {
   text?: string;

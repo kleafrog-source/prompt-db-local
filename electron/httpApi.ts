@@ -3,9 +3,9 @@ import {
   appendPromptUsageLog,
   loadMetaState,
   loadPromptSnapshot,
-  type PromptSnapshotRecord,
   type PromptUsageLogEntry,
 } from './metaStore';
+import type { PromptSnapshotRecord } from '../shared/prompt';
 
 type BatchConfig = {
   presetId?: string;

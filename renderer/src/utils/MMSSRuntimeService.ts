@@ -1,61 +1,61 @@
 import { MMSSBuilderConfig, MMSSJobResult } from '../types/mmss';
 
-declare global {
-  interface Window {
-    electronAPI: {
-      mmssRunTask: (payload: { script: string; args: string[] }) => Promise<MMSSJobResult>;
-    };
+const getElectronApi = () => {
+  if (!window.electronAPI?.mmssRunTask) {
+    throw new Error('MMSS runtime is only available inside Electron');
   }
-}
+
+  return window.electronAPI;
+};
 
 export const MMSSRuntimeService = {
   async runTransform(): Promise<MMSSJobResult> {
-    return window.electronAPI.mmssRunTask({
+    return getElectronApi().mmssRunTask({
       script: 'transform_blocks.py',
-      args: []
-    });
+      args: [],
+    }) as Promise<MMSSJobResult>;
   },
 
   async runIndexerV3(): Promise<MMSSJobResult> {
-    return window.electronAPI.mmssRunTask({
+    return getElectronApi().mmssRunTask({
       script: 'system/indexer_v3.py',
-      args: []
-    });
+      args: [],
+    }) as Promise<MMSSJobResult>;
   },
 
   async runEmbeddings(): Promise<MMSSJobResult> {
-    return window.electronAPI.mmssRunTask({
+    return getElectronApi().mmssRunTask({
       script: 'system/embedding_builder.py',
-      args: []
-    });
+      args: [],
+    }) as Promise<MMSSJobResult>;
   },
 
   async runGraphV3(): Promise<MMSSJobResult> {
-    return window.electronAPI.mmssRunTask({
+    return getElectronApi().mmssRunTask({
       script: 'system/graph_builder_v3.py',
-      args: []
-    });
+      args: [],
+    }) as Promise<MMSSJobResult>;
   },
 
   async runMutation(): Promise<MMSSJobResult> {
-    return window.electronAPI.mmssRunTask({
+    return getElectronApi().mmssRunTask({
       script: 'system/mutation_engine.py',
-      args: []
-    });
+      args: [],
+    }) as Promise<MMSSJobResult>;
   },
 
   async runCrossover(): Promise<MMSSJobResult> {
-    return window.electronAPI.mmssRunTask({
+    return getElectronApi().mmssRunTask({
       script: 'system/crossover_engine.py',
-      args: []
-    });
+      args: [],
+    }) as Promise<MMSSJobResult>;
   },
 
   async runSelfRules(): Promise<MMSSJobResult> {
-    return window.electronAPI.mmssRunTask({
+    return getElectronApi().mmssRunTask({
       script: 'system/self_rule_engine.py',
-      args: []
-    });
+      args: [],
+    }) as Promise<MMSSJobResult>;
   },
 
   async runBuilderV3(config: MMSSBuilderConfig): Promise<MMSSJobResult> {
@@ -65,12 +65,12 @@ export const MMSSRuntimeService = {
       '--layers', config.layers.join(','),
       '--max_blocks', config.max_blocks.toString(),
       '--temperature', config.temperature.toString(),
-      '--runs', config.runs.toString()
+      '--runs', config.runs.toString(),
     ];
 
-    return window.electronAPI.mmssRunTask({
+    return getElectronApi().mmssRunTask({
       script: 'system/builder_v3.py',
-      args
-    });
-  }
+      args,
+    }) as Promise<MMSSJobResult>;
+  },
 };

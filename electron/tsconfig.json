@@ -4,9 +4,9 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "outDir": "../dist-electron",
-    "rootDir": ".",
+    "rootDir": "..",
     "noEmit": false,
     "types": ["node"]
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts", "../shared/**/*.ts"]
 }

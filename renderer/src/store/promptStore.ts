@@ -4,6 +4,7 @@ import type {
   ElementTagBinding,
   ExportPreset,
   KeySequencePreset,
+  MistralCoordinationRecord,
   PromptDbMetaState,
   TagRegistry,
 } from '@/types/meta';
@@ -53,6 +54,7 @@ type PromptStore = {
   elementTagBindings: ElementTagBinding[];
   keySequencePresets: KeySequencePreset[];
   exportPresets: ExportPreset[];
+  mistralCoordinationHistory: MistralCoordinationRecord[];
   selectedPromptId: string | null;
   filters: PromptSearchFilters;
   wsStatus: WsState;
@@ -71,6 +73,7 @@ type PromptStore = {
   setElementTagBindings: (bindings: ElementTagBinding[]) => void;
   setKeySequencePresets: (presets: KeySequencePreset[]) => void;
   setExportPresets: (presets: ExportPreset[]) => void;
+  appendMistralCoordinationRecord: (record: MistralCoordinationRecord) => Promise<void>;
 };
 
 const emptyMeta = createEmptyMetaState();
@@ -81,6 +84,7 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
   elementTagBindings: emptyMeta.elementTagBindings,
   keySequencePresets: emptyMeta.keySequencePresets,
   exportPresets: emptyMeta.exportPresets,
+  mistralCoordinationHistory: emptyMeta.mistralCoordinationHistory,
   selectedPromptId: null,
   filters: {
     query: '',
@@ -150,6 +154,7 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
       elementTagBindings: metaState.elementTagBindings,
       keySequencePresets: metaState.keySequencePresets,
       exportPresets: metaState.exportPresets,
+      mistralCoordinationHistory: metaState.mistralCoordinationHistory,
     });
   },
   saveMetaState: async (next) => {
@@ -163,6 +168,8 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
       elementTagBindings: next?.elementTagBindings ?? current.elementTagBindings,
       keySequencePresets: next?.keySequencePresets ?? current.keySequencePresets,
       exportPresets: next?.exportPresets ?? current.exportPresets,
+      mistralCoordinationHistory:
+        next?.mistralCoordinationHistory ?? current.mistralCoordinationHistory,
     };
 
     await window.electronAPI.saveMetaState(payload);
@@ -272,6 +279,7 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
       elementTagBindings: emptyMeta.elementTagBindings,
       keySequencePresets: emptyMeta.keySequencePresets,
       exportPresets: emptyMeta.exportPresets,
+      mistralCoordinationHistory: emptyMeta.mistralCoordinationHistory,
       selectedPromptId: null,
       importLog: [
         createImportLogEntry(
@@ -289,4 +297,12 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
   setElementTagBindings: (elementTagBindings) => set({ elementTagBindings }),
   setKeySequencePresets: (keySequencePresets) => set({ keySequencePresets }),
   setExportPresets: (exportPresets) => set({ exportPresets }),
+  appendMistralCoordinationRecord: async (record) => {
+    const current = get();
+    const nextHistory = [record, ...current.mistralCoordinationHistory].slice(0, 200);
+
+    await get().saveMetaState({
+      mistralCoordinationHistory: nextHistory,
+    });
+  },
 }));

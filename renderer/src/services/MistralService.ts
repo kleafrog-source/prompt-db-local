@@ -1,133 +1,118 @@
-// Φ_total(mistral_service) — сервис для интеграции Mistral API
-// Координирующий слой для эволюции процессов
+import type { MistralMessage, MistralResponse } from '../../../shared/electron';
+import type {
+  CritiqueOutput,
+  CritiqueOutputRequest,
+  GeneratedRules,
+  GenerateRulesRequest,
+  GenerationPlan,
+  GenerationPlanRequest,
+  MistralStatus,
+  SessionSummary,
+  StructuredResult,
+  SummarizeSessionRequest,
+} from '../../../shared/mistral';
 
-export interface MistralMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
+export type { MistralMessage, MistralResponse } from '../../../shared/electron';
 
-export interface MistralResponse {
-  ok: boolean;
-  data?: {
-    choices: Array<{
-      message: {
-        role: string;
-        content: string;
-      };
-      finish_reason: string;
-      index: number;
-    }>;
-    usage?: {
-      prompt_tokens: number;
-      completion_tokens: number;
-      total_tokens: number;
-    };
-  };
-  error?: string;
-}
+const missingApiError = (name: string) => `${name} API not available in Electron`;
 
-// Базовый вызов Mistral API
 export async function callMistral(
   messages: MistralMessage[],
   model = 'mistral-large-latest',
 ): Promise<MistralResponse> {
   if (!window.electronAPI?.mistralChat) {
-    return { ok: false, error: 'Mistral API not available in Electron' };
+    return { ok: false, error: missingApiError('Mistral') };
   }
 
-  return window.electronAPI.mistralChat({
-    messages,
-    model,
-  });
+  return window.electronAPI.mistralChat({ messages, model });
 }
 
-// Φ_total(process) — Применение Φ_total к процессу
 export async function applyPhiTotal(
   process: string,
   context?: string,
   model?: string,
 ): Promise<MistralResponse> {
   if (!window.electronAPI?.mistralApplyPhi) {
-    return { ok: false, error: 'PhiTotal API not available in Electron' };
+    return { ok: false, error: missingApiError('PhiTotal') };
   }
 
-  return window.electronAPI.mistralApplyPhi({
-    process,
-    context,
-    model,
-  });
+  return window.electronAPI.mistralApplyPhi({ process, context, model });
 }
 
-// Генерация правил для rule-engine mode
+export async function getMistralStatus(): Promise<MistralStatus> {
+  if (!window.electronAPI?.getMistralStatus) {
+    return {
+      configured: false,
+      available: false,
+      defaultModel: 'mistral-large-latest',
+      error: missingApiError('Mistral status'),
+    };
+  }
+
+  return window.electronAPI.getMistralStatus();
+}
+
+export async function planGenerationWithMistral(
+  payload: GenerationPlanRequest,
+): Promise<StructuredResult<GenerationPlan>> {
+  if (!window.electronAPI?.mistralPlanGeneration) {
+    return { ok: false, error: missingApiError('Plan generation') };
+  }
+
+  return window.electronAPI.mistralPlanGeneration(payload);
+}
+
+export async function generateRulesStructured(
+  payload: GenerateRulesRequest,
+): Promise<StructuredResult<GeneratedRules>> {
+  if (!window.electronAPI?.mistralGenerateRules) {
+    return { ok: false, error: missingApiError('Rule generation') };
+  }
+
+  return window.electronAPI.mistralGenerateRules(payload);
+}
+
+export async function critiqueOutputWithMistral(
+  payload: CritiqueOutputRequest,
+): Promise<StructuredResult<CritiqueOutput>> {
+  if (!window.electronAPI?.mistralCritiqueOutput) {
+    return { ok: false, error: missingApiError('Critique output') };
+  }
+
+  return window.electronAPI.mistralCritiqueOutput(payload);
+}
+
+export async function summarizeSessionWithMistral(
+  payload: SummarizeSessionRequest,
+): Promise<StructuredResult<SessionSummary>> {
+  if (!window.electronAPI?.mistralSummarizeSession) {
+    return { ok: false, error: missingApiError('Session summary') };
+  }
+
+  return window.electronAPI.mistralSummarizeSession(payload);
+}
+
 export async function generateRulesWithMistral(
   intent: string,
   availableDomains: string[],
   availableLayers: number[],
 ): Promise<{
-  rules: Array<{
-    name: string;
-    logic: 'must_include_layers' | 'min_domains' | 'conditional_requirement';
-    value?: number[] | number;
-  }>;
+  rules: GeneratedRules['rules']['composition_rules'];
   explanation: string;
 }> {
-  const systemPrompt = `Ты — архитектор генеративных систем. Создай правила композиции для rule-engine mode на основе интента и доступных ресурсов.
+  const response = await generateRulesStructured({
+    intent,
+    availableDomains,
+    availableLayers,
+    currentMode: 'rule-engine',
+  });
 
-Правила должны следовать формату:
-- layer_balance: must_include_layers с массивом слоёв
-- domain_spread: min_domains с минимальным числом доменов
-- conditional_requirement: условные правила (опционально)
-
-Ответь в JSON формате:
-{
-  "rules": [...],
-  "explanation": "почему выбраны эти правила"
-}`;
-
-  const userPrompt = `Интент: "${intent}"
-Доступные домены: ${availableDomains.join(', ')}
-Доступные слои: ${availableLayers.join(', ')}
-
-Создай оптимальные правила композиции.`;
-
-  const response = await callMistral(
-    [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    'mistral-large-latest',
-  );
-
-  if (!response.ok || !response.data) {
-    // Φ_total(fallback) — возвращаем дефолтные правила при ошибке
-    return {
-      rules: [
-        { name: 'layer_balance', logic: 'must_include_layers', value: availableLayers.slice(0, 3) },
-        { name: 'domain_spread', logic: 'min_domains', value: Math.min(2, availableDomains.length) },
-      ],
-      explanation: 'Default rules (Mistral API unavailable)',
-    };
-  }
-
-  try {
-    const content = response.data.choices[0]?.message?.content || '{}';
-    const parsed = JSON.parse(content);
-    return {
-      rules: parsed.rules || [],
-      explanation: parsed.explanation || 'Rules generated by Mistral',
-    };
-  } catch {
-    return {
-      rules: [
-        { name: 'layer_balance', logic: 'must_include_layers', value: availableLayers.slice(0, 3) },
-        { name: 'domain_spread', logic: 'min_domains', value: Math.min(2, availableDomains.length) },
-      ],
-      explanation: 'Default rules (parsing error)',
-    };
-  }
+  return {
+    rules: response.data?.rules.composition_rules ?? [],
+    explanation: response.data?.explanation ?? response.error ?? 'Rule generation unavailable',
+  };
 }
 
-// Анализ экспорта и предложения по оптимизации
 export async function analyzeExportWithMistral(
   exportData: unknown,
   currentMode: string,
@@ -136,94 +121,65 @@ export async function analyzeExportWithMistral(
   suggestions: string[];
   nextSteps: string[];
 }> {
-  const systemPrompt = `Ты — аналитик генеративных систем. Проанализируй данные экспорта и предложи улучшения.
-Используй принципы Φ_total: нет фиксированной точки, только эволюция.
+  const response = await critiqueOutputWithMistral({
+    exportData,
+    currentMode,
+  });
 
-Ответь в JSON формате:
-{
-  "insights": ["..."],
-  "suggestions": ["..."],
-  "nextSteps": ["..."]
-}`;
+  const critique = response.data;
 
-  const userPrompt = `Текущий mode: ${currentMode}
-Данные экспорта: ${JSON.stringify(exportData, null, 2).slice(0, 2000)}
-
-Проанализируй и предложи улучшения.`;
-
-  const response = await callMistral(
-    [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    'mistral-small-latest', // используем smaller model для экономии
-  );
-
-  if (!response.ok || !response.data) {
-    return {
-      insights: ['Analysis unavailable'],
-      suggestions: ['Try again later'],
-      nextSteps: ['Continue with current settings'],
-    };
-  }
-
-  try {
-    const content = response.data.choices[0]?.message?.content || '{}';
-    const parsed = JSON.parse(content);
-    return {
-      insights: parsed.insights || [],
-      suggestions: parsed.suggestions || [],
-      nextSteps: parsed.nextSteps || [],
-    };
-  } catch {
-    return {
-      insights: ['Parsing error'],
-      suggestions: ['Check data format'],
-      nextSteps: ['Continue with current settings'],
-    };
-  }
+  return {
+    insights: critique?.strengths ?? ['Analysis unavailable'],
+    suggestions: critique?.weaknesses ?? [response.error ?? 'Try again later'],
+    nextSteps: critique?.nextAdjustments ?? ['Continue with current settings'],
+  };
 }
 
-// Хук для использования в React компонентах
 export function useMistralService() {
   return {
     callMistral,
     applyPhiTotal,
+    getMistralStatus,
+    planGenerationWithMistral,
     generateRulesWithMistral,
+    generateRulesStructured,
     analyzeExportWithMistral,
+    critiqueOutputWithMistral,
+    summarizeSessionWithMistral,
   };
 }
 
-// Утилиты для работы с результатами
 export function extractContentFromResponse(response: MistralResponse): string {
   if (!response.ok || !response.data) {
     return response.error || 'Unknown error';
   }
+
   return response.data.choices[0]?.message?.content || 'No content';
 }
 
-// Форматирование для UI
 export function formatPhiTotalResult(response: MistralResponse): {
   title: string;
   content: string;
   tokens?: { prompt: number; completion: number; total: number };
 } {
   const content = extractContentFromResponse(response);
-  
+
   if (!response.ok) {
     return {
-      title: 'Φ_total (Error)',
-      content: `Ошибка применения Φ_total: ${content}`,
+      title: 'Phi_total (Error)',
+      content: `Error applying Phi_total: ${content}`,
     };
   }
 
   return {
-    title: 'Φ_total Analysis',
+    title: 'Phi_total Analysis',
     content,
-    tokens: response.data?.usage ? {
-      prompt: response.data.usage.prompt_tokens,
-      completion: response.data.usage.completion_tokens,
-      total: response.data.usage.total_tokens,
-    } : undefined,
+    tokens: response.data?.usage
+      ? {
+          prompt: response.data.usage.prompt_tokens,
+          completion: response.data.usage.completion_tokens,
+          total: response.data.usage.total_tokens,
+        }
+      : undefined,
   };
 }

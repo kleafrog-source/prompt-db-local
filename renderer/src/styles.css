@@ -185,6 +185,12 @@ code {
   resize: vertical;
 }
 
+.panel pre {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
 .prompt-list {
   display: grid;
   gap: 12px;
