@@ -2,74 +2,74 @@
   "generated_count": 9,
   "crossovers": [
     {
-      "id": "cross_e348",
+      "id": "cross_a46",
       "parents": [
-        "meta_212",
-        "meta_154"
+        "meta_220",
+        "97"
       ],
       "strategy": "shared_domain_merge"
     },
     {
-      "id": "cross_fa79",
+      "id": "cross_3915",
       "parents": [
-        "meta_137",
-        "33"
+        "47",
+        "80"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_259a",
+      "parents": [
+        "meta_145",
+        "meta_282"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_5f05",
+      "parents": [
+        "83",
+        "meta_330"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_3bab",
+      "parents": [
+        "meta_125",
+        "meta_165"
+      ],
+      "strategy": "shared_domain_merge"
+    },
+    {
+      "id": "cross_13a2",
+      "parents": [
+        "54",
+        "89"
       ],
       "strategy": "params_union"
     },
     {
-      "id": "cross_51b3",
+      "id": "cross_6357",
       "parents": [
-        "meta_173",
-        "33"
+        "meta_174",
+        "105"
       ],
       "strategy": "shared_domain_merge"
     },
     {
-      "id": "cross_ac6",
+      "id": "cross_2975",
       "parents": [
-        "meta_170",
-        "95"
-      ],
-      "strategy": "shared_domain_merge"
-    },
-    {
-      "id": "cross_bc9a",
-      "parents": [
-        "meta_281",
-        "meta_190"
-      ],
-      "strategy": "shared_domain_merge"
-    },
-    {
-      "id": "cross_1ad7",
-      "parents": [
-        "meta_212",
-        "meta_122"
+        "97",
+        "18"
       ],
       "strategy": "params_union"
     },
     {
-      "id": "cross_a12f",
+      "id": "cross_6613",
       "parents": [
-        "meta_129",
-        "meta_225"
-      ],
-      "strategy": "shared_domain_merge"
-    },
-    {
-      "id": "cross_4830",
-      "parents": [
-        "meta_129",
-        "meta_203"
-      ],
-      "strategy": "params_union"
-    },
-    {
-      "id": "cross_a9fc",
-      "parents": [
-        "33",
-        "meta_220"
+        "meta_149",
+        "meta_269"
       ],
       "strategy": "shared_domain_merge"
     }

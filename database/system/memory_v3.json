@@ -1,7 +1,7 @@
 {
   "block_stats": {
     "1": {
-      "usage_count": 19,
+      "usage_count": 22,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -71,14 +71,14 @@
       "lineage_score": 0.5
     },
     "110": {
-      "usage_count": 13,
+      "usage_count": 18,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "101": {
-      "usage_count": 19,
+      "usage_count": 22,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -120,14 +120,14 @@
       "lineage_score": 0.5
     },
     "12": {
-      "usage_count": 16,
+      "usage_count": 21,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "107": {
-      "usage_count": 12,
+      "usage_count": 17,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -162,14 +162,14 @@
       "lineage_score": 0.5
     },
     "31": {
-      "usage_count": 6,
+      "usage_count": 8,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "28": {
-      "usage_count": 6,
+      "usage_count": 7,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -197,28 +197,28 @@
       "lineage_score": 0.5
     },
     "21": {
-      "usage_count": 6,
+      "usage_count": 7,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "3": {
-      "usage_count": 4,
+      "usage_count": 5,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "2": {
-      "usage_count": 12,
+      "usage_count": 16,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "16": {
-      "usage_count": 10,
+      "usage_count": 14,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -232,7 +232,7 @@
       "lineage_score": 0.5
     },
     "108.7": {
-      "usage_count": 2,
+      "usage_count": 4,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -295,7 +295,7 @@
       "lineage_score": 0.5
     },
     "92": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -309,7 +309,7 @@
       "lineage_score": 0.5
     },
     "71": {
-      "usage_count": 2,
+      "usage_count": 3,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -400,7 +400,7 @@
       "lineage_score": 0.5
     },
     "meta_185": {
-      "usage_count": 1,
+      "usage_count": 3,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -463,7 +463,7 @@
       "lineage_score": 0.5
     },
     "meta_147": {
-      "usage_count": 3,
+      "usage_count": 4,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -533,7 +533,7 @@
       "lineage_score": 0.5
     },
     "meta_327": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -645,7 +645,7 @@
       "lineage_score": 0.5
     },
     "53": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -785,7 +785,7 @@
       "lineage_score": 0.5
     },
     "meta_130": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -841,14 +841,14 @@
       "lineage_score": 0.5
     },
     "87": {
-      "usage_count": 5,
+      "usage_count": 6,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
       "lineage_score": 0.5
     },
     "meta_181": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -869,7 +869,7 @@
       "lineage_score": 0.5
     },
     "59": {
-      "usage_count": 3,
+      "usage_count": 4,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -883,7 +883,7 @@
       "lineage_score": 0.5
     },
     "78": {
-      "usage_count": 3,
+      "usage_count": 4,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -932,7 +932,7 @@
       "lineage_score": 0.5
     },
     "24": {
-      "usage_count": 2,
+      "usage_count": 4,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1268,7 +1268,7 @@
       "lineage_score": 0.5
     },
     "meta_135": {
-      "usage_count": 4,
+      "usage_count": 5,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1331,7 +1331,7 @@
       "lineage_score": 0.5
     },
     "44.6": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1359,7 +1359,7 @@
       "lineage_score": 0.5
     },
     "meta_122": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1415,7 +1415,7 @@
       "lineage_score": 0.5
     },
     "6": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1429,7 +1429,7 @@
       "lineage_score": 0.5
     },
     "15": {
-      "usage_count": 8,
+      "usage_count": 13,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1702,7 +1702,7 @@
       "lineage_score": 0.5
     },
     "74": {
-      "usage_count": 4,
+      "usage_count": 5,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1814,7 +1814,7 @@
       "lineage_score": 0.5
     },
     "10": {
-      "usage_count": 3,
+      "usage_count": 5,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -1968,7 +1968,7 @@
       "lineage_score": 0.5
     },
     "14": {
-      "usage_count": 2,
+      "usage_count": 4,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -2213,7 +2213,7 @@
       "lineage_score": 0.5
     },
     "93": {
-      "usage_count": 4,
+      "usage_count": 7,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -2241,7 +2241,7 @@
       "lineage_score": 0.5
     },
     "108.9": {
-      "usage_count": 2,
+      "usage_count": 4,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -2304,7 +2304,7 @@
       "lineage_score": 0.5
     },
     "meta_173": {
-      "usage_count": 1,
+      "usage_count": 2,
       "success_score": 0.5,
       "penalty_score": 0.0,
       "novelty_score": 0.5,
@@ -2915,6 +2915,90 @@
       "15": 0.1,
       "16": 0.1,
       "12": 0.1
+    },
+    "tribal metallic klang": {
+      "71": 0.1,
+      "meta_185": 0.1,
+      "6": 0.1,
+      "108.9": 0.1,
+      "14": 0.1,
+      "meta_130": 0.1,
+      "108.7": 0.1,
+      "10": 0.1,
+      "44.6": 0.1,
+      "24": 0.1
+    },
+    "tribal metallic klang orchestration opera": {
+      "87": 0.1,
+      "15": 0.1,
+      "101": 0.1,
+      "110": 0.1,
+      "2": 0.1,
+      "16": 0.1,
+      "1": 0.1,
+      "107": 0.1,
+      "12": 0.1,
+      "93": 0.1
+    },
+    "trap ritmics without trap-bass-drum": {
+      "108.9": 0.1,
+      "108.7": 0.1,
+      "53": 0.1,
+      "meta_173": 0.1,
+      "14": 0.1,
+      "24": 0.1,
+      "meta_122": 0.1,
+      "meta_185": 0.1,
+      "92": 0.1,
+      "meta_181": 0.1
+    },
+    "trap without trap-bass-drum": {
+      "16": 0.1,
+      "2": 0.1,
+      "59": 0.1,
+      "101": 0.1,
+      "28": 0.1,
+      "107": 0.1,
+      "15": 0.1,
+      "110": 0.1,
+      "3": 0.1,
+      "12": 0.1
+    },
+    "brain-washing-machine-dark-psy": {
+      "meta_327": 0.1,
+      "16": 0.1,
+      "10": 0.1,
+      "1": 0.1,
+      "12": 0.1,
+      "107": 0.1,
+      "2": 0.1,
+      "15": 0.1,
+      "110": 0.1,
+      "21": 0.1
+    },
+    "organic house": {
+      "meta_135": 0.1,
+      "107": 0.1,
+      "16": 0.1,
+      "78": 0.1,
+      "31": 0.1,
+      "2": 0.1,
+      "12": 0.1,
+      "15": 0.1,
+      "93": 0.1,
+      "110": 0.1
+    },
+    "mmss_ase_ideal_alignment": {
+      "1": 0.1,
+      "meta_147": 0.1,
+      "74": 0.1,
+      "93": 0.1,
+      "107": 0.1,
+      "101": 0.1,
+      "12": 0.1,
+      "31": 0.1,
+      "110": 0.1,
+      "15": 0.1
     }
   },
   "generation_stats": {}
